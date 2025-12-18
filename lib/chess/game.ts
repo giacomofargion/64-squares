@@ -29,7 +29,7 @@ export class ChessGame {
   makeMove(from: Square, to: Square, promotion?: string): boolean {
     try {
       // Check if this is a pawn promotion move (pawn moving to rank 1 or 8)
-      const piece = this.chess.get(from);
+      const piece = this.chess.get(from as any);
       const isPawn = piece && piece.type === 'p';
       const isPromotionSquare = to[1] === '1' || to[1] === '8';
       const isPromotionMove = isPawn && isPromotionSquare;

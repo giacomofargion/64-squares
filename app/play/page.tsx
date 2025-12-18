@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Board } from '@/components/chess/Board';
 import { ChessGame } from '@/lib/chess/game';
@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-export default function PlayPage() {
+function PlayPageContent() {
   const searchParams = useSearchParams();
   const synthFromUrl = searchParams?.get('synth') as SynthType | null;
 
@@ -155,5 +155,17 @@ export default function PlayPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PlayPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-foreground">Loading...</div>
+      </div>
+    }>
+      <PlayPageContent />
+    </Suspense>
   );
 }

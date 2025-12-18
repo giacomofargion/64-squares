@@ -257,6 +257,7 @@ export default function MatchPage() {
       const currentGame = gameRef.current;
       if (currentGame && updatedMatch.current_fen) {
         const currentFen = currentGame.getFen();
+        const initialFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
         // Don't sync if we're initializing
         if (isInitializingRef.current) {
@@ -264,12 +265,22 @@ export default function MatchPage() {
           return;
         }
 
+        // Check if this is a restart (FEN reset to initial position)
+        const isRestart = updatedMatch.current_fen === initialFen && currentFen !== initialFen;
+
         // Always sync if FENs don't match - match FEN is the source of truth
         if (currentFen !== updatedMatch.current_fen) {
+          // If this is a restart, clear applied moves tracking immediately
+          if (isRestart) {
+            console.log('Detected game restart - clearing applied moves tracking');
+            appliedMovesRef.current.clear();
+          }
+
           // If we just applied a move locally, give it a moment to propagate to the database
           // But don't wait too long - if match FEN is different, it's the truth
+          // Skip the delay if this is a restart (we want immediate sync)
           const timeSinceLastMove = Date.now() - lastAppliedMoveTimeRef.current;
-          if (isApplyingMoveRef.current && timeSinceLastMove < 300) {
+          if (!isRestart && isApplyingMoveRef.current && timeSinceLastMove < 300) {
             console.log('Move just applied, waiting briefly before syncing', {
               timeSinceLastMove,
             });
@@ -290,6 +301,7 @@ export default function MatchPage() {
             matchFen: updatedMatch.current_fen,
             timeSinceLastMove,
             isApplying: isApplyingMoveRef.current,
+            isRestart,
           });
           currentGame.loadFen(updatedMatch.current_fen);
           setGameStateKeyRef.current(prev => prev + 1);
@@ -355,15 +367,29 @@ export default function MatchPage() {
             color = 'b';
             setIsCreator(false);
           } else {
-            // Player name not found in match - this shouldn't happen, but log it
-            console.warn('Player name not found in match:', {
+            // Player name not found in match - redirect them away
+            console.warn('Player name not found in match - redirecting:', {
               currentUserName,
               whitePlayerName: match.white_player_name,
               blackPlayerName: match.black_player_name,
             });
-            color = null;
+            // User is not one of the two players - redirect to home
+            router.replace('/');
+            return;
           }
         }
+
+        // Additional safety check: ensure room has exactly 1 or 2 players
+        const hasWhitePlayer = !!match.white_player_name;
+        const hasBlackPlayer = !!match.black_player_name;
+        const playerCount = (hasWhitePlayer ? 1 : 0) + (hasBlackPlayer ? 1 : 0);
+
+        if (playerCount > 2) {
+          console.error('Room has more than 2 players - invalid state');
+          router.replace('/');
+          return;
+        }
+
         setPlayerColor(color);
         console.log('Set player color:', { color, currentUserName, whitePlayerName: match.white_player_name, blackPlayerName: match.black_player_name });
 
@@ -565,14 +591,28 @@ export default function MatchPage() {
 
     const initialFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
-    // Reset game state
+    // Reset game state locally
     if (game) {
       game.loadFen(initialFen);
       setGameStateKey(prev => prev + 1);
     }
 
-    // Update match
-    await supabase
+    // Clear applied moves tracking
+    appliedMovesRef.current.clear();
+
+    // Delete all old moves from the database to ensure clean restart
+    const { error: deleteError } = await supabase
+      .from('moves')
+      .delete()
+      .eq('match_id', matchId);
+
+    if (deleteError) {
+      console.error('Error deleting old moves:', deleteError);
+      // Continue anyway - the restart should still work
+    }
+
+    // Update match with initial FEN and reset status
+    const { error: updateError } = await supabase
       .from('matches')
       .update({
         current_fen: initialFen,
@@ -582,22 +622,23 @@ export default function MatchPage() {
       })
       .eq('id', matchId);
 
-    // Clear moves (optional - you might want to keep move history)
-    appliedMovesRef.current.clear();
+    if (updateError) {
+      console.error('Error updating match on restart:', updateError);
+    }
   };
 
   const handleEndRoom = async () => {
     if (!match || !isCreator) return;
 
+    // Delete the match (moves and chat messages will be deleted automatically via CASCADE)
     await supabase
       .from('matches')
-      .update({
-        status: 'finished',
-      })
+      .delete()
       .eq('id', matchId);
 
     router.push('/');
   };
+
 
   if (loading || !match || !game || !playerColor) {
     return (

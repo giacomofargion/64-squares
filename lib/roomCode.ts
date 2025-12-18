@@ -25,13 +25,13 @@ export async function findMatchByCode(
     return null;
   }
 
-  // Get all waiting matches (or all matches if needed)
+  // Get all matches (not just waiting) - we need to check active rooms too
   // We'll need to fetch and filter client-side since we can't easily search by UUID suffix in SQL
   const { data: matches, error } = await supabase
     .from('matches')
-    .select('id')
-    .eq('status', 'waiting')
-    .or('black_player_id.is.null,black_player_name.is.null');
+    .select('id, status, black_player_name')
+    .order('created_at', { ascending: false })
+    .limit(100); // Reasonable limit to avoid fetching too many
 
   if (error || !matches) {
     return null;
@@ -43,7 +43,7 @@ export async function findMatchByCode(
     return matchCode.toLowerCase() === code.toLowerCase();
   });
 
-  return match || null;
+  return match ? { id: match.id } : null;
 }
 
 /**

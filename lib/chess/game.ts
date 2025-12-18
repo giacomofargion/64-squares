@@ -168,7 +168,7 @@ export class ChessGame {
    * Get the piece on a square
    */
   getPiece(square: Square): { type: PieceType; color: Color } | null {
-    const piece = this.chess.get(square);
+    const piece = this.chess.get(square as any);
     if (!piece) return null;
     return {
       type: piece.type as PieceType,

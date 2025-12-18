@@ -1,36 +1,144 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 64 Squares - Music Chess App
+
+A multiplayer chess application where each move generates musical sounds, creating a unique audio experience. Each square on the board corresponds to a musical note, and moves trigger overlapping 20-second sounds that create harmonies based on the game state.
+
+## Features
+
+- **Musical Chess**: Each of the 64 squares maps to a unique note based on its position
+- **Real-time Multiplayer**: Play chess online with friends using Supabase Realtime
+- **Chat System**: Communicate with your opponent during matches
+- **Synth Selection**: Choose from multiple synthesizer types (Synth, AMSynth, FMSynth, etc.)
+- **Audio Recording**: Games are recorded as WAV files and stored in your account
+- **Match History**: View and download recordings of all your past games
+
+## Musical System
+
+### Column-to-Note Mapping (A-H)
+- A → A (440 Hz)
+- B → B♭ (466.16 Hz)
+- C → C (523.25 Hz)
+- D → D (587.33 Hz)
+- E → E (659.25 Hz)
+- F → F (698.46 Hz)
+- G → G (783.99 Hz)
+- H → B (493.88 Hz)
+
+### Row Variations (1-8)
+Each row adds:
+- **Octave offset**: Row 1 = -2 octaves, Row 8 = +2 octaves
+- **Timbral variation**: Different synth parameters per row
+
+### Sound Events
+- **Moves**: Each move triggers a 20-second sustained note
+- **Captures**: When a piece is captured, all 8 notes in that row play with a 50ms stagger
+
+## Tech Stack
+
+- **Framework**: Next.js 14+ (App Router) with TypeScript
+- **Database & Auth**: Supabase (PostgreSQL, Auth, Realtime, Storage)
+- **Chess Logic**: chess.js
+- **Audio**: Tone.js (PolySynth with user-selectable mono synths)
+- **Styling**: Tailwind CSS v4
+- **State Management**: React Hooks + Zustand
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ and npm
+- A Supabase account (free tier works)
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd 64-squares
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up Supabase:
+   - Create a new Supabase project at [supabase.com](https://supabase.com)
+   - Copy your project URL and anon key
+   - Create a `.env.local` file:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_project_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Set up the database:
+   - Go to your Supabase project dashboard
+   - Navigate to SQL Editor
+   - Copy and paste the contents of `supabase/schema.sql`
+   - Run the SQL script
 
-## Learn More
+5. Enable Realtime:
+   - Go to Database > Replication
+   - Enable replication for: `matches`, `moves`, `chat_messages` tables
 
-To learn more about Next.js, take a look at the following resources:
+6. Create Storage bucket:
+   - Go to Storage in Supabase dashboard
+   - Create a bucket named `audio-files`
+   - Set it to public (or configure RLS for authenticated access)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+7. Run the development server:
+```bash
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+8. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+/app
+  /(auth)          # Authentication pages
+  /(dashboard)     # Protected dashboard pages
+  /api             # API routes
+/components
+  /chess           # Chess board components
+  /audio           # Audio engine and recording
+  /chat            # Chat components
+  /match           # Match-related components
+/lib
+  /supabase        # Supabase client setup
+  /chess           # Chess game logic
+  /audio           # Audio mapping and synth config
+/hooks             # Custom React hooks
+/types             # TypeScript type definitions
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Usage
+
+1. **Sign Up/Login**: Create an account or sign in
+2. **Create Match**: Choose your synth type and create a new match
+3. **Join Match**: Enter a match ID to join an existing game
+4. **Play**: Make moves to trigger musical sounds
+5. **Chat**: Communicate with your opponent
+6. **View History**: See all your past matches and download audio recordings
+
+## Development
+
+### Key Components
+
+- **SoundGenerator**: Manages PolySynth and triggers notes
+- **AudioEngine**: React hook for audio playback
+- **ChessGame**: Wraps chess.js for game logic
+- **Board**: Interactive chess board with drag-and-drop
+- **useRealtimeMatch**: Hook for real-time match synchronization
+
+### Audio Recording
+
+Games are recorded using Tone.js OfflineContext, which replays all moves to generate a WAV file. The recording is uploaded to Supabase Storage when the game ends.
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.

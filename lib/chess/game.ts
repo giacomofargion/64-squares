@@ -28,21 +28,30 @@ export class ChessGame {
    */
   makeMove(from: Square, to: Square, promotion?: string): boolean {
     try {
+      // Check if this is a pawn promotion move (pawn moving to rank 1 or 8)
+      const piece = this.chess.get(from);
+      const isPawn = piece && piece.type === 'p';
+      const isPromotionSquare = to[1] === '1' || to[1] === '8';
+      const isPromotionMove = isPawn && isPromotionSquare;
+
+      // If it's a promotion move and no promotion is specified, default to queen
+      const effectivePromotion = isPromotionMove && !promotion ? 'q' : promotion;
+
       // Validate that it's a legal move
       const legalMoves = this.chess.moves({ verbose: true });
       const isValidMove = legalMoves.some(
-        m => m.from === from && m.to === to && (!promotion || m.promotion === promotion)
+        m => m.from === from && m.to === to && (!effectivePromotion || m.promotion === effectivePromotion)
       );
 
       if (!isValidMove) {
-        console.warn('Move is not in legal moves list:', { from, to, promotion });
+        console.warn('Move is not in legal moves list:', { from, to, promotion: effectivePromotion });
         return false;
       }
 
       const move = this.chess.move({
         from,
         to,
-        promotion: promotion as any,
+        promotion: effectivePromotion as any,
       });
 
       if (!move) {

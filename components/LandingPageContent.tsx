@@ -115,10 +115,23 @@ export function LandingPageContent() {
         throw new Error('Room not found. Please check the room code.');
       }
 
-      // Check if already in match (by name)
-      if (match.white_player_name === username.trim() || match.black_player_name === username.trim()) {
+      const trimmedUsername = username.trim();
+
+      // Simple rejoin: if name matches either player (case-insensitive), just redirect to match
+      const isWhitePlayer = match.white_player_name?.toLowerCase() === trimmedUsername.toLowerCase();
+      const isBlackPlayer = match.black_player_name?.toLowerCase() === trimmedUsername.toLowerCase();
+
+      if (isWhitePlayer || isBlackPlayer) {
+        // Use the original name from the match to maintain consistency
+        const actualName = isWhitePlayer ? match.white_player_name : match.black_player_name;
+        setGuestName(actualName || trimmedUsername);
         router.push(`/match/${matchId}`);
         return;
+      }
+
+      // Ensure room has a creator (white player)
+      if (!match.white_player_name) {
+        throw new Error('Room is invalid. Please create a new room.');
       }
 
       // Check if match is waiting
@@ -126,20 +139,20 @@ export function LandingPageContent() {
         throw new Error('Room is not waiting for players.');
       }
 
-      // Check if black player slot is available
+      // Check if black player slot is available (room already has 2 players)
       if (match.black_player_name) {
         throw new Error('Room is full. Both players have already joined.');
       }
 
       // Join as black player
       const updateData = {
-        black_player_name: username.trim(),
+        black_player_name: trimmedUsername,
         black_player_synth_type: synthType,
         status: 'active',
         started_at: new Date().toISOString(),
       };
 
-      setGuestName(username.trim());
+      setGuestName(trimmedUsername);
 
       const { data: updatedMatches, error: updateError } = await supabase
         .from('matches')
@@ -164,7 +177,7 @@ export function LandingPageContent() {
         if (currentMatch?.black_player_name) {
           throw new Error('Room is full. Both players have already joined.');
         }
-        throw new Error('Failed to join room. The room may have been updated by someone else.');
+        throw new Error('Failed to join room. If you are trying to rejoin a room, please just simply create a new room.');
       }
 
       router.push(`/match/${matchId}`);

@@ -171,7 +171,10 @@ export function useRealtimeMatch({
           setError(null); // Clear any previous errors
         } else if (status === 'CHANNEL_ERROR') {
           const errorMessage = err?.message || err?.toString() || (err ? JSON.stringify(err) : 'Unknown realtime error');
-          const errorCode = err?.code || err?.status || 'UNKNOWN';
+          // Safely access code/status properties that may exist on Supabase error objects
+          const errorCode = (err && typeof err === 'object' && 'code' in err ? (err as any).code : null) ||
+                           (err && typeof err === 'object' && 'status' in err ? (err as any).status : null) ||
+                           'UNKNOWN';
 
           console.error('Realtime subscription error:', {
             status,

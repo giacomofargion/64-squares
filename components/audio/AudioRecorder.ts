@@ -55,7 +55,15 @@ export class AudioRecorder {
       }
 
       // Render audio
-      const buffer = await offlineContext.render();
+      const toneBuffer = await offlineContext.render();
+
+      // Get the underlying AudioBuffer from ToneAudioBuffer
+      // ToneAudioBuffer.get() returns the native AudioBuffer, or we can access ._buffer
+      const buffer: AudioBuffer = (
+        (toneBuffer as any).get?.() ||
+        (toneBuffer as any)._buffer ||
+        toneBuffer
+      ) as AudioBuffer;
 
       // Convert to WAV
       const wav = this.bufferToWav(buffer);

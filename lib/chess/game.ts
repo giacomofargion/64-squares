@@ -12,7 +12,7 @@ export class ChessGame {
   /**
    * Set callback for when a move is made
    */
-  setOnMove(callback: (move: Move, captured: boolean, capturedRow?: number) => void | null) {
+  setOnMove(callback: ((move: Move, captured: boolean, capturedRow?: number) => void) | null | undefined) {
     this.onMoveCallback = callback || undefined;
   }
 

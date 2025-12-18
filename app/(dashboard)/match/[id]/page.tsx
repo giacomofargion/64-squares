@@ -13,6 +13,23 @@ import { getGuestName } from '@/lib/guestSession';
 import { generateRoomCode } from '@/lib/roomCode';
 import type { Match, MoveRecord } from '@/types/match';
 import type { Square } from '@/types/chess';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Copy, Check } from 'lucide-react';
 
 export default function MatchPage() {
   const params = useParams();
@@ -27,10 +44,11 @@ export default function MatchPage() {
   const [whitePlayerName, setWhitePlayerName] = useState<string | null>(null);
   const [blackPlayerName, setBlackPlayerName] = useState<string | null>(null);
   const [roomEndedMessage, setRoomEndedMessage] = useState<string | null>(null);
+  const [roomCodeCopied, setRoomCodeCopied] = useState(false);
+  const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const previousMatchStatusRef = useRef<string | null>(null);
   const [gameStateKey, setGameStateKey] = useState(0); // Force re-render when game state changes
   const appliedMovesRef = useRef<Set<number>>(new Set()); // Track which moves have been applied
-  const [appliedMovesCount, setAppliedMovesCount] = useState(0); // Track applied moves count for display
   const audioEngineRef = useRef<ReturnType<typeof useDualAudioEngine> | null>(null); // Reference to audio engine for use in callbacks
   const gameRef = useRef<ChessGame | null>(null); // Reference to game for use in callbacks
   const matchRef = useRef<Match | null>(null); // Reference to match for use in callbacks
@@ -78,7 +96,6 @@ export default function MatchPage() {
 
       // Update applied moves count
       appliedMovesRef.current.add(move.move_number);
-      setAppliedMovesCount(appliedMovesRef.current.size);
 
       console.log('Applying opponent move:', move, {
         currentFen: currentGame.getFen(),
@@ -132,7 +149,6 @@ export default function MatchPage() {
       if (success) {
         console.log('Move applied successfully');
         appliedMovesRef.current.add(move.move_number);
-        setAppliedMovesCount(appliedMovesRef.current.size);
         // Force re-render by updating key
         setGameStateKeyRef.current(prev => prev + 1);
 
@@ -188,6 +204,10 @@ export default function MatchPage() {
 
       if (currentUserName) {
         currentPlayerColor = updatedMatch.white_player_name === currentUserName ? 'w' : updatedMatch.black_player_name === currentUserName ? 'b' : null;
+        // Update playerColor state to ensure it stays in sync
+        if (currentPlayerColor !== null) {
+          setPlayerColor(currentPlayerColor);
+        }
       }
 
       // Update opponent synth type when opponent joins or changes their synth
@@ -204,6 +224,15 @@ export default function MatchPage() {
           console.log('Updating opponent synth type (white):', updatedMatch.white_player_synth_type, 'current:', opponentSynthType);
           setOpponentSynthType(updatedMatch.white_player_synth_type);
         }
+      }
+
+      // Update player names when match updates (e.g., when opponent joins)
+      // This ensures the creator sees the opponent's name when they join
+      if (updatedMatch.white_player_name) {
+        setWhitePlayerName(updatedMatch.white_player_name);
+      }
+      if (updatedMatch.black_player_name) {
+        setBlackPlayerName(updatedMatch.black_player_name);
       }
 
       // Check if room was ended by creator
@@ -269,7 +298,7 @@ export default function MatchPage() {
         }
       }
     };
-  }, []); // Empty deps - refs are stable
+  }, [opponentSynthType]); // Include opponentSynthType to update audio when it changes
 
   const {
     match,
@@ -319,10 +348,24 @@ export default function MatchPage() {
         // Determine player color and if user is creator
         let color: 'w' | 'b' | null = null;
         if (currentUserName) {
-          color = match.white_player_name === currentUserName ? 'w' : match.black_player_name === currentUserName ? 'b' : null;
-          setIsCreator(match.white_player_name === currentUserName); // Creator is white player
+          if (match.white_player_name === currentUserName) {
+            color = 'w';
+            setIsCreator(true); // Creator is white player
+          } else if (match.black_player_name === currentUserName) {
+            color = 'b';
+            setIsCreator(false);
+          } else {
+            // Player name not found in match - this shouldn't happen, but log it
+            console.warn('Player name not found in match:', {
+              currentUserName,
+              whitePlayerName: match.white_player_name,
+              blackPlayerName: match.black_player_name,
+            });
+            color = null;
+          }
         }
         setPlayerColor(color);
+        console.log('Set player color:', { color, currentUserName, whitePlayerName: match.white_player_name, blackPlayerName: match.black_player_name });
 
         // Set synth types - own and opponent
         if (color === 'w') {
@@ -354,7 +397,6 @@ export default function MatchPage() {
           moves.forEach((move) => {
             appliedMovesRef.current.add(move.move_number);
           });
-          setAppliedMovesCount(appliedMovesRef.current.size);
         }
 
         console.log('Game initialized from match FEN (source of truth):', match.current_fen);
@@ -383,6 +425,17 @@ export default function MatchPage() {
     matchRef.current = match;
   }, [audioEngine, game, match]);
 
+  // Show audio prompt dialog when match is ready and audio is not initialized
+  useEffect(() => {
+    if (match && game && playerColor && !audioEngine.isInitialized && !showAudioPrompt) {
+      // Small delay to ensure the page is fully rendered
+      const timer = setTimeout(() => {
+        setShowAudioPrompt(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [match, game, playerColor, audioEngine.isInitialized, showAudioPrompt]);
+
   // Set up audio triggers when game and audio engine are ready
   // This handles audio for local moves (own synth) only
   useEffect(() => {
@@ -404,6 +457,7 @@ export default function MatchPage() {
 
   const handleEnableAudio = async () => {
     await audioEngine.initializeAudio();
+    setShowAudioPrompt(false); // Close the dialog when audio is enabled
   };
 
   const handleMove = async (from: Square, to: Square) => {
@@ -451,7 +505,6 @@ export default function MatchPage() {
 
     // Mark this move as applied locally
     appliedMovesRef.current.add(moveNumber);
-    setAppliedMovesCount(appliedMovesRef.current.size);
 
     // Force re-render
     setGameStateKey(prev => prev + 1);
@@ -531,7 +584,6 @@ export default function MatchPage() {
 
     // Clear moves (optional - you might want to keep move history)
     appliedMovesRef.current.clear();
-    setAppliedMovesCount(0);
   };
 
   const handleEndRoom = async () => {
@@ -557,7 +609,8 @@ export default function MatchPage() {
 
   // Get fresh game state on every render
   const gameState = game.getGameState();
-  const isMyTurn = gameState.turn === playerColor;
+  // Ensure playerColor is set before comparing
+  const isMyTurn = playerColor !== null && gameState.turn === playerColor;
 
   // Debug logging
   console.log('Render - Game state:', {
@@ -565,50 +618,66 @@ export default function MatchPage() {
     playerColor,
     isMyTurn,
     fen: gameState.fen,
+    whitePlayerName: match?.white_player_name,
+    blackPlayerName: match?.black_player_name,
+    userName,
   });
 
   // Get display names
   const getPlayerDisplayName = (color: 'w' | 'b') => {
     if (color === 'w') {
-      if (playerColor === 'w') return 'You';
-      return whitePlayerName || 'White Player';
+      if (playerColor === 'w') {
+        return userName || 'You';
+      }
+      return whitePlayerName || (match?.status === 'waiting' ? 'Opponent' : 'White Player');
     } else {
-      if (playerColor === 'b') return 'You';
-      return blackPlayerName || 'Black Player';
+      if (playerColor === 'b') {
+        return userName || 'You';
+      }
+      return blackPlayerName || (match?.status === 'waiting' ? 'Opponent' : 'Black Player');
     }
   };
 
   const roomCode = generateRoomCode(matchId);
 
+  const handleCopyRoomCode = () => {
+    navigator.clipboard.writeText(roomCode);
+    setRoomCodeCopied(true);
+    setTimeout(() => setRoomCodeCopied(false), 2000);
+  };
+
   return (
-    <div className="min-h-screen bg-[#212529] text-white p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <header className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">♞</span>
-            <h1 className="text-2xl font-bold">64 Squares</h1>
           </div>
           <div className="flex gap-4 items-center">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-[#6C757D]">Room Code:</span>
-              <code className="text-xs bg-[#343A40] px-2 py-1 rounded text-[#ADB5BD]">{roomCode}</code>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(roomCode);
-                  alert('Room code copied!');
-                }}
-                className="text-xs text-[#ADB5BD] hover:text-white underline"
-              >
-                Copy
-              </button>
+              <span className="text-base text-muted-foreground">Room Code:</span>
+              <Badge variant="outline" className="font-mono text-base px-3 py-1.5">{roomCode}</Badge>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    onClick={handleCopyRoomCode}
+                  >
+                    {roomCodeCopied ? (
+                      <Check className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <Copy className="h-5 w-5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{roomCodeCopied ? 'Copied!' : 'Copy room code'}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
-            <Link
-              href="/"
-              className="px-4 py-2 text-[#ADB5BD] hover:text-white font-medium transition-colors"
-            >
-              Back to Home
-            </Link>
+            <Button variant="ghost" asChild className="text-base">
+              <Link href="/">Back to Home</Link>
+            </Button>
           </div>
         </header>
 
@@ -618,126 +687,90 @@ export default function MatchPage() {
             {getPlayerDisplayName('w')} vs {getPlayerDisplayName('b')}
           </h2>
           {match.room_name && (
-            <p className="text-lg text-[#ADB5BD]">{match.room_name}</p>
+            <p className="text-lg text-muted-foreground">{match.room_name}</p>
           )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
           {/* Main board area - 70% width */}
           <div className="lg:col-span-7 space-y-4">
-            <div className="bg-[#343A40] rounded-lg shadow-md p-4">
-
+            <Card>
+              <CardContent className="pt-6 space-y-4">
             {gameState.isCheckmate && (
-              <div className="mb-4 p-3 bg-[#495057] border border-[#6C757D] rounded text-white">
-                Checkmate! {gameState.turn === 'w' ? 'Black' : 'White'} wins!
-              </div>
+              <Alert>
+                <AlertTitle>Checkmate!</AlertTitle>
+                <AlertDescription>
+                  {gameState.turn === 'w' ? 'Black' : 'White'} wins!
+                </AlertDescription>
+              </Alert>
             )}
 
             {gameState.isStalemate && (
-              <div className="mb-4 p-3 bg-[#495057] border border-[#6C757D] rounded text-white">
-                Stalemate! The game is a draw.
-              </div>
+              <Alert>
+                <AlertTitle>Stalemate!</AlertTitle>
+                <AlertDescription>The game is a draw.</AlertDescription>
+              </Alert>
             )}
 
             {match.status === 'waiting' && (
-              <div className="mb-4 p-3 bg-[#495057] border border-[#6C757D] rounded text-white">
-                Waiting for opponent to join...
-              </div>
+              <Alert>
+                <AlertDescription>Waiting for opponent to join...</AlertDescription>
+              </Alert>
             )}
 
             {match.status === 'active' && !gameState.isCheckmate && !gameState.isStalemate && (
-              <div className="mb-4 p-3 bg-[#495057] border border-[#6C757D] rounded text-white">
-                {isMyTurn ? 'Your turn' : "Opponent's turn"} - {gameState.turn === 'w' ? 'White' : 'Black'} to move
-              </div>
+              <Alert>
+                <AlertDescription>
+                  {isMyTurn ? 'Your turn' : "Opponent's turn"} - {gameState.turn === 'w' ? 'White' : 'Black'} to move
+                </AlertDescription>
+              </Alert>
             )}
 
             {roomEndedMessage && (
-              <div className="mb-4 p-4 bg-[#495057] border border-[#6C757D] rounded-lg">
-                <p className="text-white text-lg font-semibold mb-2">⚠️ Room Ended</p>
-                <p className="text-[#ADB5BD]">{roomEndedMessage}</p>
-                <button
-                  onClick={() => router.push('/')}
-                  className="mt-4 px-4 py-2 bg-[#495057] hover:bg-[#6C757D] text-white rounded-md transition-colors"
-                >
+              <Alert variant="destructive">
+                <AlertTitle>⚠️ Room Ended</AlertTitle>
+                <AlertDescription className="mb-4">{roomEndedMessage}</AlertDescription>
+                <Button onClick={() => router.push('/')} variant="outline" size="sm">
                   Return to Home
-                </button>
-              </div>
+                </Button>
+              </Alert>
             )}
 
             {realtimeError && (
-              <div className="mb-4 p-4 bg-[#495057] border border-[#6C757D] rounded-lg">
-                <p className="text-white text-sm font-semibold mb-2">⚠️ Realtime Connection Error</p>
-                <p className="text-[#ADB5BD] text-xs mb-2">{realtimeError}</p>
-                <details className="text-xs text-red-300">
-                  <summary className="cursor-pointer hover:text-red-200">How to fix</summary>
+              <Alert variant="destructive">
+                <AlertTitle>⚠️ Realtime Connection Error</AlertTitle>
+                <AlertDescription className="mb-2">{realtimeError}</AlertDescription>
+                <details className="text-xs">
+                  <summary className="cursor-pointer hover:underline">How to fix</summary>
                   <ol className="list-decimal list-inside mt-2 space-y-1">
                     <li>Go to your Supabase dashboard</li>
                     <li>Navigate to SQL Editor</li>
-                    <li>Run the SQL from <code className="bg-red-800 px-1 rounded">supabase/enable_realtime.sql</code></li>
+                    <li>Run the SQL from <code className="bg-destructive/20 px-1 rounded">supabase/enable_realtime.sql</code></li>
                     <li>Or enable replication in Database → Replication for: matches, moves, chat_messages</li>
                     <li>Refresh this page</li>
                   </ol>
                 </details>
-              </div>
+              </Alert>
             )}
 
-            {/* Debug/Recovery Tools */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="mb-4 p-3 bg-[#343A40] border border-[#495057] rounded-lg">
-                <details className="text-xs">
-                  <summary className="cursor-pointer font-semibold text-[#ADB5BD] mb-2">🔧 Debug Tools</summary>
-                  <div className="space-y-2 mt-2">
-                    <div className="text-xs text-[#6C757D]">
-                      <p>Game FEN: <code className="bg-[#212529] px-1 rounded text-[#ADB5BD]">{gameState.fen}</code></p>
-                      <p>Match FEN: <code className="bg-[#212529] px-1 rounded text-[#ADB5BD]">{match.current_fen}</code></p>
-                      <p>Applied Moves: {appliedMovesCount}</p>
-                      <p>Total Moves: {moves.length}</p>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (game && match) {
-                          console.log('Syncing game from match FEN...');
-                          game.loadFen(match.current_fen);
-                          setGameStateKey(prev => prev + 1);
-                          alert('Game state synced from match FEN');
-                        }
-                      }}
-                      className="px-3 py-1 bg-[#495057] text-white rounded text-xs hover:bg-[#6C757D]"
-                    >
-                      Sync from Match FEN
-                    </button>
-                    <button
-                      onClick={() => {
-                        console.log('Game state:', {
-                          fen: game?.getFen(),
-                          turn: game?.getGameState().turn,
-                          appliedMoves: Array.from(appliedMovesRef.current),
-                          allMoves: moves.map(m => ({ number: m.move_number, from: m.move_from, to: m.move_to })),
-                        });
-                        alert('Check console for game state details');
-                      }}
-                      className="px-3 py-1 bg-[#495057] text-white rounded text-xs hover:bg-[#6C757D] ml-2"
-                    >
-                      Log Game State
-                    </button>
-                  </div>
-                </details>
-              </div>
-            )}
 
-            {!audioEngine.isInitialized && (
-              <div className="mb-4 p-4 bg-[#495057] border border-[#6C757D] rounded-lg">
-                <p className="text-white mb-3 text-sm">
-                  <strong>Audio disabled:</strong> Click below to enable sound for this match.
-                </p>
-                <button
-                  onClick={handleEnableAudio}
-                  className="px-4 py-2 bg-[#495057] hover:bg-[#6C757D] text-white rounded-md text-sm font-semibold transition-colors"
-                >
-                  🎵 Enable Audio
-                </button>
-              </div>
-            )}
+            {/* Audio prompt dialog - shows when player joins */}
+            <AlertDialog open={showAudioPrompt} onOpenChange={setShowAudioPrompt}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Enable Audio</AlertDialogTitle>
+                  <AlertDialogDescription>
+                  Please enable audio.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogAction onClick={handleEnableAudio} className="border-2 border-input">
+                    Enable Audio
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
 
 
             <div key={gameStateKey}>
@@ -752,21 +785,53 @@ export default function MatchPage() {
             {/* Creator Controls */}
             {isCreator && (
               <div className="flex gap-4 mt-4">
-                <button
-                  onClick={handleRestartGame}
-                  className="flex-1 px-4 py-2 bg-[#495057] hover:bg-[#6C757D] text-white rounded-lg font-medium transition-colors"
-                >
-                  Restart Game
-                </button>
-                <button
-                  onClick={handleEndRoom}
-                  className="flex-1 px-4 py-2 bg-[#495057] hover:bg-[#6C757D] text-white rounded-lg font-medium transition-colors"
-                >
-                  End Room
-                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="border-[0.5px] w-full">
+                      Restart Game
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Restart Game?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will reset the game to the starting position. All moves will be cleared. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleRestartGame}>
+                        Restart Game
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="border-[0.5px] w-full">
+                      End Room
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>End Room?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will end the room and notify all players. The game will be marked as finished. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleEndRoom}>
+                        End Room
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
-            </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Sidebar with chat - 30% width */}

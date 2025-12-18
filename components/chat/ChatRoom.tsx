@@ -2,6 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import type { ChatMessage } from '@/types/match';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface ChatRoomProps {
   messages: ChatMessage[];
@@ -46,63 +52,85 @@ export function ChatRoom({ messages, onSendMessage, currentUserName }: ChatRoomP
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#343A40] border border-[#495057] rounded-lg">
-      <div className="p-3 border-b border-[#495057]">
-        <h3 className="text-sm font-semibold text-[#ADB5BD]">Chat</h3>
-      </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {messages.length === 0 ? (
-          <p className="text-xs text-[#6C757D] text-center">No messages yet. Start the conversation!</p>
-        ) : (
-          messages.map((message) => {
-            const isOwn = isOwnMessage(message);
-            return (
-              <div
-                key={message.id}
-                className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[80%] px-3 py-2 rounded-lg ${
-                    isOwn
-                      ? 'bg-[#495057] text-white'
-                      : 'bg-[#212529] text-[#ADB5BD]'
-                  }`}
-                >
-                  {!isOwn && (
-                    <div className="text-xs font-semibold mb-1 opacity-75">
-                      {getDisplayName(message)}
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">Chat</CardTitle>
+      </CardHeader>
+      <Separator />
+      <CardContent className="flex-1 p-3 flex flex-col">
+        <ScrollArea className="flex-1 pr-4">
+          <div className="space-y-2">
+            {messages.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">No messages yet. Start the conversation!</p>
+            ) : (
+              messages.map((message) => {
+                const isOwn = isOwnMessage(message);
+                const displayName = getDisplayName(message);
+                const initials = displayName
+                  .split(' ')
+                  .map(n => n[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2);
+
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}
+                  >
+                    {!isOwn && (
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div
+                      className={`max-w-[80%] px-3 py-2 rounded-lg ${
+                        isOwn
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-foreground'
+                      }`}
+                    >
+                      {!isOwn && (
+                        <div className="text-xs font-semibold mb-1 opacity-75">
+                          {displayName}
+                        </div>
+                      )}
+                      <div className="text-xs">{message.message}</div>
+                      <div className={`text-[10px] mt-1 ${isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                        {new Date(message.created_at).toLocaleTimeString()}
+                      </div>
                     </div>
-                  )}
-                  <div className="text-xs">{message.message}</div>
-                  <div className={`text-[10px] mt-1 ${isOwn ? 'text-[#ADB5BD]' : 'text-[#6C757D]'}`}>
-                    {new Date(message.created_at).toLocaleTimeString()}
+                    {isOwn && (
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+                      </Avatar>
+                    )}
                   </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-      <form onSubmit={handleSubmit} className="p-3 border-t border-[#495057]">
-        <div className="flex space-x-2">
-          <input
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+        <Separator className="my-2" />
+        <form onSubmit={handleSubmit} className="flex space-x-2">
+          <Input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 px-3 py-2 bg-[#495057] border border-[#6C757D] rounded-md text-white placeholder-[#6C757D] focus:outline-none focus:ring-2 focus:ring-[#ADB5BD] text-sm"
             disabled={sending}
+            className="flex-1"
           />
-          <button
+          <Button
             type="submit"
             disabled={sending || !input.trim()}
-            className="px-3 py-2 bg-[#495057] hover:bg-[#6C757D] text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ADB5BD] disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            size="sm"
           >
             {sending ? '...' : 'Send'}
-          </button>
-        </div>
-      </form>
-    </div>
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inconsolata } from "next/font/google";
 import "./globals.css";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inconsolata = Inconsolata({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: "--font-inconsolata",
+  display: "swap",
+  weight: ["300", "400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "64 Squares - Music Chess",
-  description: "Play chess with musical sound generation",
+  title: "64 Squares - Virtual Musical Chess Board",
+  description: "A virtual chess board that creates music using an 8-note scale. Play solo or with friends.",
 };
 
 export default function RootLayout({
@@ -25,9 +23,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inconsolata.variable} font-sans antialiased`}
       >
-        {children}
+        <TooltipProvider>
+          {children}
+        </TooltipProvider>
       </body>
     </html>
   );

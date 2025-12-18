@@ -1,6 +1,7 @@
 'use client';
 
 import type { PieceType, Color } from '@/types/chess';
+import Image from 'next/image';
 
 interface PieceProps {
   type: PieceType;
@@ -8,49 +9,42 @@ interface PieceProps {
   isDragging?: boolean;
 }
 
-const pieceSymbols: Record<Color, Record<PieceType, string>> = {
-  w: {
-    p: '♙',
-    r: '♖',
-    n: '♘',
-    b: '♗',
-    q: '♕',
-    k: '♔',
-  },
-  b: {
-    p: '♟',
-    r: '♜',
-    n: '♞',
-    b: '♝',
-    q: '♛',
-    k: '♚',
-  },
+// Map piece types to file names
+const pieceNameMap: Record<PieceType, string> = {
+  p: 'pawn',
+  r: 'rook',
+  n: 'knight',
+  b: 'bishop',
+  q: 'queen',
+  k: 'king',
 };
 
 export function Piece({ type, color, isDragging }: PieceProps) {
-  const symbol = pieceSymbols[color][type];
-  const isWhite = color === 'w';
+  const pieceName = pieceNameMap[type];
+  const colorSuffix = color === 'w' ? 'w' : 'b';
+  const imagePath = `/chess-pieces/${pieceName}-${colorSuffix}.svg`;
 
   return (
     <div
       className={`
-        text-4xl md:text-5xl select-none
+        w-full h-full select-none
+        flex items-center justify-center
         ${isDragging ? 'opacity-50 scale-110' : ''}
         transition-transform duration-150
         relative
-        ${isWhite
-          ? 'text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] filter brightness-110'
-          : 'text-gray-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.3)] filter brightness-90'
-        }
       `}
-      style={{
-        textShadow: isWhite
-          ? '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 2px rgba(0,0,0,0.5)'
-          : '2px 2px 4px rgba(255,255,255,0.5), -1px -1px 2px rgba(255,255,255,0.3)',
-        WebkitTextStroke: isWhite ? '0.5px rgba(0,0,0,0.3)' : '0.5px rgba(255,255,255,0.2)',
-      }}
     >
-      {symbol}
+      <Image
+        src={imagePath}
+        alt={`${color === 'w' ? 'White' : 'Black'} ${pieceName}`}
+        width={45}
+        height={45}
+        className="w-[85%] h-[85%] object-contain"
+        style={{
+          filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))',
+        }}
+        priority
+      />
     </div>
   );
 }

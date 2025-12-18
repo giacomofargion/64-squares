@@ -8,6 +8,14 @@ import { getGuestName, setGuestName } from '@/lib/guestSession';
 import { normalizeRoomCode } from '@/lib/roomCode';
 import { generateRoomCode } from '@/lib/roomCode';
 import type { SynthType } from '@/types/audio';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Users, Play } from 'lucide-react';
 
 type Tab = 'create' | 'join' | 'solo';
 
@@ -68,8 +76,8 @@ export function LandingPageContent() {
         // Redirect to match page
         router.push(`/match/${data.id}`);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to create room');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create room');
     } finally {
       setLoading(false);
     }
@@ -160,8 +168,8 @@ export function LandingPageContent() {
       }
 
       router.push(`/match/${matchId}`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to join room');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to join room');
     } finally {
       setLoading(false);
     }
@@ -172,223 +180,226 @@ export function LandingPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#212529] text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <header className="flex justify-between items-center py-6">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">♞</span>
-            <h1 className="text-2xl font-bold">64 Squares</h1>
-          </div>
-        </header>
+    <div className="min-h-screen bg-black relative">
+      {/* Gradient Background */}
+      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/50 via-black to-zinc-900/50 pointer-events-none" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800/20 via-black to-black pointer-events-none" />
 
+      {/* Content */}
+      <div className="relative z-10">
         {/* Main Content */}
-        <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[calc(100vh-200px)] py-12">
-          {/* Left Panel - Form */}
-          <div className="space-y-8">
-            <div className="text-center lg:text-left">
-              <div className="flex items-center justify-center lg:justify-start gap-3 mb-4">
-                <span className="text-5xl">♞</span>
-                <h2 className="text-5xl font-bold">Play Chess</h2>
-              </div>
-              <p className="text-xl text-[#ADB5BD]">Local Network Chess Arena</p>
-            </div>
-
-            <div className="bg-[#343A40] rounded-lg p-6 space-y-6">
-              {/* Tab Buttons */}
-              <div className="flex gap-4 border-b border-[#495057]">
-                <button
-                  onClick={() => {
-                    setActiveTab('create');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-3 font-medium transition-colors ${
-                    activeTab === 'create'
-                      ? 'border-b-2 border-[#ADB5BD] text-[#ADB5BD]'
-                      : 'text-[#6C757D] hover:text-[#ADB5BD]'
-                  }`}
-                >
-                  Create Room
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveTab('join');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-3 font-medium transition-colors ${
-                    activeTab === 'join'
-                      ? 'border-b-2 border-[#ADB5BD] text-[#ADB5BD]'
-                      : 'text-[#6C757D] hover:text-[#ADB5BD]'
-                  }`}
-                >
-                  Join Room
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveTab('solo');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-3 font-medium transition-colors ${
-                    activeTab === 'solo'
-                      ? 'border-b-2 border-[#ADB5BD] text-[#ADB5BD]'
-                      : 'text-[#6C757D] hover:text-[#ADB5BD]'
-                  }`}
-                >
-                  Play Solo
-                </button>
+        <main className="container mx-auto px-4 py-4 md:py-6">
+          <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start max-w-7xl mx-auto">
+            {/* Left Column - Get Started */}
+            <div className="space-y-4 lg:space-y-6">
+              <div className="space-y-2 lg:space-y-3">
+                <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-balance leading-tight text-white">Get Started</h2>
+                <p className="text-base lg:text-lg text-white/60 text-pretty">
+                  Create a room, join a friend, or play solo
+                </p>
               </div>
 
-              {/* Create Room Tab */}
-              {activeTab === 'create' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[#ADB5BD] mb-2">
-                      Your Name
-                    </label>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Enter your name"
-                      className="w-full px-4 py-2 bg-[#495057] border border-[#6C757D] rounded-lg text-white placeholder-[#ADB5BD] focus:outline-none focus:ring-2 focus:ring-[#ADB5BD]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[#ADB5BD] mb-2">
-                      Room Name
-                    </label>
-                    <input
-                      type="text"
-                      value={roomName}
-                      onChange={(e) => setRoomName(e.target.value)}
-                      placeholder="Enter room name"
-                      className="w-full px-4 py-2 bg-[#495057] border border-[#6C757D] rounded-lg text-white placeholder-[#ADB5BD] focus:outline-none focus:ring-2 focus:ring-[#ADB5BD]"
-                    />
-                  </div>
-                  <div>
-                    <SynthSelector
-                      value={synthType}
-                      onChange={setSynthType}
-                      label="Synth Choice"
-                    />
-                  </div>
-                  {createdRoomCode && (
-                    <div className="p-3 bg-[#495057] rounded-lg">
-                      <p className="text-sm text-[#ADB5BD] mb-1">Generated Room Code:</p>
-                      <code className="text-lg font-mono text-white">{createdRoomCode}</code>
+              <Card className="border-white/10 shadow-2xl overflow-hidden bg-zinc-950">
+                <Tabs value={activeTab} onValueChange={(value) => {
+                  setActiveTab(value as Tab);
+                  setError(null);
+                }} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3 rounded-none border-b border-white/10 bg-black h-10 lg:h-12">
+                    <TabsTrigger
+                      value="create"
+                      className="gap-1.5 text-sm lg:text-base data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
+                    >
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+                      <span className="hidden sm:inline">Create Room</span>
+                      <span className="sm:hidden">Create</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="join"
+                      className="gap-1.5 text-sm lg:text-base data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
+                    >
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+                      <span className="hidden sm:inline">Join Room</span>
+                      <span className="sm:hidden">Join</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="solo"
+                      className="gap-1.5 text-sm lg:text-base data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
+                    >
+                      <Play className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+                      <span className="hidden sm:inline">Play Solo</span>
+                      <span className="sm:hidden">Solo</span>
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="create" className="p-4 lg:p-6 space-y-4 lg:space-y-5">
+                    <div className="space-y-3 lg:space-y-4">
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="create-name" className="text-white text-sm lg:text-base">
+                          Your Name
+                        </Label>
+                        <Input
+                          id="create-name"
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="Enter your name"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
+                        />
+                      </div>
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="create-room-name" className="text-white text-sm lg:text-base">
+                          Room Name
+                        </Label>
+                        <Input
+                          id="create-room-name"
+                          type="text"
+                          value={roomName}
+                          onChange={(e) => setRoomName(e.target.value)}
+                          placeholder="Enter room name"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
+                        />
+                      </div>
+                      <div>
+                        <SynthSelector
+                          value={synthType}
+                          onChange={setSynthType}
+                          label="Synth Choice"
+                        />
+                      </div>
+                      {createdRoomCode && (
+                        <div className="p-2 bg-black/50 rounded-lg border border-white/10">
+                          <p className="text-xs text-white/60 mb-1">Generated Room Code:</p>
+                          <Badge variant="outline" className="text-sm font-mono bg-black border-white/20 text-white">{createdRoomCode}</Badge>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <button
-                    onClick={handleCreateRoom}
-                    disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#495057] hover:bg-[#6C757D] rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span>+</span>
-                    {loading ? 'Creating...' : 'Create Room'}
-                  </button>
-                </div>
-              )}
+                    <Button
+                      onClick={handleCreateRoom}
+                      disabled={loading}
+                      className="w-full h-9 lg:h-11 text-sm lg:text-base font-medium bg-white text-black hover:bg-white/90"
+                    >
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-2" />
+                      {loading ? 'Creating...' : 'Create Room'}
+                    </Button>
+                  </TabsContent>
 
-              {/* Join Room Tab */}
-              {activeTab === 'join' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[#ADB5BD] mb-2">
-                      Your Name
-                    </label>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Enter your name"
-                      className="w-full px-4 py-2 bg-[#495057] border border-[#6C757D] rounded-lg text-white placeholder-[#ADB5BD] focus:outline-none focus:ring-2 focus:ring-[#ADB5BD]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[#ADB5BD] mb-2">
-                      Room Code
-                    </label>
-                    <input
-                      type="text"
-                      value={roomCode}
-                      onChange={(e) => setRoomCode(e.target.value)}
-                      placeholder="Enter room code"
-                      className="w-full px-4 py-2 bg-[#495057] border border-[#6C757D] rounded-lg text-white placeholder-[#ADB5BD] focus:outline-none focus:ring-2 focus:ring-[#ADB5BD]"
-                    />
-                  </div>
-                  <div>
-                    <SynthSelector
-                      value={synthType}
-                      onChange={setSynthType}
-                      label="Synth Choice"
-                    />
-                  </div>
-                  <button
-                    onClick={handleJoinRoom}
-                    disabled={loading || !roomCode.trim()}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#495057] hover:bg-[#6C757D] rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span>👤</span>
-                    {loading ? 'Joining...' : 'Join Room'}
-                  </button>
-                </div>
-              )}
+                  <TabsContent value="join" className="p-4 lg:p-6 space-y-4 lg:space-y-5">
+                    <div className="space-y-3 lg:space-y-4">
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="join-name" className="text-white text-sm lg:text-base">
+                          Your Name
+                        </Label>
+                        <Input
+                          id="join-name"
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="Enter your name"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
+                        />
+                      </div>
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="join-room-code" className="text-white text-sm lg:text-base">
+                          Room Code
+                        </Label>
+                        <Input
+                          id="join-room-code"
+                          type="text"
+                          value={roomCode}
+                          onChange={(e) => setRoomCode(e.target.value)}
+                          placeholder="Enter room code"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
+                        />
+                      </div>
+                      <div>
+                        <SynthSelector
+                          value={synthType}
+                          onChange={setSynthType}
+                          label="Synth Choice"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleJoinRoom}
+                      disabled={loading || !roomCode.trim()}
+                      className="w-full h-9 lg:h-11 text-sm lg:text-base font-medium bg-white text-black hover:bg-white/90"
+                    >
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-2" />
+                      {loading ? 'Joining...' : 'Join Room'}
+                    </Button>
+                  </TabsContent>
 
-              {/* Play Solo Tab */}
-              {activeTab === 'solo' && (
-                <div className="space-y-4">
-                  <div>
-                    <SynthSelector
-                      value={synthType}
-                      onChange={setSynthType}
-                      label="Synth Choice"
-                    />
-                  </div>
-                  <button
-                    onClick={handlePlaySolo}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#495057] hover:bg-[#6C757D] rounded-lg font-medium transition-colors"
-                  >
-                    Start Solo Game
-                  </button>
-                </div>
-              )}
-
-              {error && (
-                <div className="bg-[#495057] border border-[#6C757D] text-[#ADB5BD] px-4 py-3 rounded-lg">
-                  {error}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Panel - Chess Board Visual */}
-          <div className="hidden lg:block">
-            <div className="relative">
-              {/* 3D Chess Board Representation */}
-              <div className="aspect-square bg-gradient-to-br from-[#495057] via-[#343A40] to-[#495057] rounded-lg shadow-2xl p-8">
-                <div className="grid grid-cols-8 gap-0 h-full w-full rounded shadow-inner">
-                  {/* Chess board squares */}
-                  {Array.from({ length: 64 }).map((_, i) => {
-                    const row = Math.floor(i / 8);
-                    const col = i % 8;
-                    const isLight = (row + col) % 2 === 0;
-                    return (
-                      <div
-                        key={i}
-                        className={`${isLight ? 'bg-[#E9ECEF]' : 'bg-[#495057]'} border border-[#DEE2E6]`}
+                  <TabsContent value="solo" className="p-4 lg:p-6 space-y-4 lg:space-y-5">
+                    <div>
+                      <SynthSelector
+                        value={synthType}
+                        onChange={setSynthType}
+                        label="Synth Choice"
                       />
-                    );
-                  })}
+                    </div>
+                    <Button
+                      onClick={handlePlaySolo}
+                      className="w-full h-9 lg:h-11 text-sm lg:text-base font-medium bg-white text-black hover:bg-white/90"
+                    >
+                      <Play className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-2" />
+                      Start Solo Game
+                    </Button>
+                  </TabsContent>
+                </Tabs>
+
+                {error && (
+                  <Alert variant="destructive" className="mt-4 bg-destructive/20 border-destructive/50">
+                    <AlertDescription className="text-white">{error}</AlertDescription>
+                  </Alert>
+                )}
+              </Card>
+            </div>
+
+            {/* Right Column - About */}
+            <div className="lg:sticky lg:top-20">
+              <Card className="border-white/10 shadow-2xl p-6 lg:p-8 space-y-4 lg:space-y-5 bg-zinc-950">
+                <div className="space-y-1.5 lg:space-y-2">
+                  <h3 className="text-xl lg:text-2xl font-bold text-balance text-white">64 Squares</h3>
+                  <div className="h-0.5 w-full bg-white rounded-full" />
                 </div>
-                {/* Decorative pieces */}
-                <div className="absolute top-4 left-4 text-4xl text-[#212529]">♜</div>
-                <div className="absolute top-4 right-4 text-4xl text-[#212529]">♜</div>
-                <div className="absolute bottom-4 left-4 text-4xl text-white">♖</div>
-                <div className="absolute bottom-4 right-4 text-4xl text-white">♖</div>
-              </div>
+
+                <div className="space-y-2.5 lg:space-y-3 text-white/70 leading-relaxed text-sm lg:text-base">
+                  <p>
+                    64 Squares is a virtual chess board which utilises an 8 note scale to represent the columns on a
+                    chess board: A, B (bflat in German), C, D, E, F G, H (b in German).
+                  </p>
+
+                  <p>
+                    Each note of the scale has 8 variations in colour, to represent the ranks (rows) of the board. (eg
+                    D1, D2, D3, D4 etc), making in total 64 different but related sounds.
+                  </p>
+
+                  <p>
+                    As the pieces move around the board, they trigger various tones which have different durations,
+                    creating overlaps. Experiment with the different synthesizer types to see how the sound changes.
+                  </p>
+                </div>
+              </Card>
             </div>
           </div>
-        </div>
+        </main>
+
+        {/* Footer */}
+        <footer className="container mx-auto px-4 py-6 lg:py-8">
+          <div className="flex justify-center items-center">
+            <p className="text-sm lg:text-base text-white/60">
+              Created by{' '}
+              <a
+                href="https://giacomofargion.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white transition-colors underline"
+              >
+                Giacomo Fargion
+              </a>
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   );

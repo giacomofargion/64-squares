@@ -9,6 +9,9 @@ import { SynthSelector } from '@/components/audio/SynthSelector';
 import type { SynthType } from '@/types/audio';
 import type { Square } from '@/types/chess';
 import Link from 'next/link';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function PlayPage() {
   const searchParams = useSearchParams();
@@ -54,7 +57,7 @@ export default function PlayPage() {
   const currentTurn = gameState.turn;
 
   return (
-    <div className="min-h-screen bg-[#212529] text-white">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <header className="flex justify-between items-center mb-8">
@@ -62,22 +65,18 @@ export default function PlayPage() {
             <span className="text-3xl">♞</span>
             <h1 className="text-2xl font-bold">64 Squares</h1>
           </div>
-          <Link
-            href="/"
-            className="px-4 py-2 text-[#ADB5BD] hover:text-white font-medium transition-colors"
-          >
-            Back to Home
-          </Link>
+          <Button variant="ghost" asChild>
+            <Link href="/">Back to Home</Link>
+          </Button>
         </header>
 
         <div className="max-w-4xl mx-auto">
-          <div className="bg-[#343A40] rounded-lg p-8 space-y-6">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold mb-2">Solo Play</h2>
-              <p className="text-[#ADB5BD]">Play against yourself</p>
-            </div>
-
-            <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-center text-2xl">Solo Play</CardTitle>
+              <CardDescription className="text-center text-base">Play against yourself</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <SynthSelector
                 value={synthType}
                 onChange={setSynthType}
@@ -85,17 +84,14 @@ export default function PlayPage() {
               />
 
               {!audioEngine.isInitialized && (
-                <div className="p-4 bg-[#495057] border border-[#6C757D] rounded-lg">
-                  <p className="text-[#ADB5BD] mb-3 text-sm">
+                <Alert>
+                  <AlertDescription className="mb-3">
                     <strong>Audio disabled:</strong> Click below to enable sound.
-                  </p>
-                  <button
-                    onClick={handleEnableAudio}
-                    className="px-4 py-2 bg-[#495057] hover:bg-[#6C757D] text-white rounded-md text-sm font-semibold transition-colors"
-                  >
+                  </AlertDescription>
+                  <Button onClick={handleEnableAudio} size="sm">
                     🎵 Enable Audio
-                  </button>
-                </div>
+                  </Button>
+                </Alert>
               )}
 
               <div className="flex justify-center">
@@ -108,29 +104,28 @@ export default function PlayPage() {
               </div>
 
               <div className="flex justify-center gap-4">
-                <button
-                  onClick={handleReset}
-                  className="px-6 py-2 bg-[#495057] hover:bg-[#6C757D] rounded-lg font-medium transition-colors"
-                >
+                <Button onClick={handleReset} variant="outline">
                   Reset Game
-                </button>
+                </Button>
               </div>
 
               {gameState.isCheckmate && (
-                <div className="p-3 bg-[#495057] border border-[#6C757D] rounded text-center">
-                  <p className="text-lg font-semibold">
+                <Alert>
+                  <AlertDescription className="text-center text-lg font-semibold">
                     Checkmate! {gameState.turn === 'w' ? 'Black' : 'White'} wins!
-                  </p>
-                </div>
+                  </AlertDescription>
+                </Alert>
               )}
 
               {gameState.isStalemate && (
-                <div className="p-3 bg-[#495057] border border-[#6C757D] rounded text-center">
-                  <p className="text-lg font-semibold">Stalemate! The game is a draw.</p>
-                </div>
+                <Alert>
+                  <AlertDescription className="text-center text-lg font-semibold">
+                    Stalemate! The game is a draw.
+                  </AlertDescription>
+                </Alert>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

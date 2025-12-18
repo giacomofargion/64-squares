@@ -88,7 +88,7 @@ export class ChessGame {
    */
   getLegalMoves(square: Square): Square[] {
     try {
-      const moves = this.chess.moves({ square, verbose: true });
+      const moves = this.chess.moves({ square: square as any, verbose: true });
       return moves.map(move => move.to as Square);
     } catch {
       return [];

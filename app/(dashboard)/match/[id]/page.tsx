@@ -655,19 +655,18 @@ export default function MatchPage() {
           </div>
           <div className="flex gap-4 items-center">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Room Code:</span>
-              <Badge variant="outline" className="font-mono">{roomCode}</Badge>
+              <span className="text-base text-muted-foreground">Room Code:</span>
+              <Badge variant="outline" className="font-mono text-base px-3 py-1.5">{roomCode}</Badge>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="sm"
                     onClick={handleCopyRoomCode}
                   >
                     {roomCodeCopied ? (
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-5 w-5 text-green-500" />
                     ) : (
-                      <Copy className="h-4 w-4" />
+                      <Copy className="h-5 w-5" />
                     )}
                   </Button>
                 </TooltipTrigger>
@@ -676,7 +675,7 @@ export default function MatchPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Button variant="ghost" asChild>
+            <Button variant="ghost" asChild className="text-base">
               <Link href="/">Back to Home</Link>
             </Button>
           </div>
@@ -761,7 +760,7 @@ export default function MatchPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Enable Audio</AlertDialogTitle>
                   <AlertDialogDescription>
-                    To experience the full musical chess experience, please enable audio. Each move will generate unique sounds based on the position and piece type.
+                  Please enable audio.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -788,7 +787,7 @@ export default function MatchPage() {
               <div className="flex gap-4 mt-4">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="flex-1">
+                    <Button variant="outline" className="border-[0.5px] w-full">
                       Restart Game
                     </Button>
                   </AlertDialogTrigger>
@@ -810,7 +809,7 @@ export default function MatchPage() {
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="flex-1">
+                    <Button variant="destructive" className="border-[0.5px] w-full">
                       End Room
                     </Button>
                   </AlertDialogTrigger>

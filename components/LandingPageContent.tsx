@@ -191,10 +191,10 @@ export function LandingPageContent() {
         <main className="container mx-auto px-4 py-4 md:py-6">
           <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start max-w-7xl mx-auto">
             {/* Left Column - Get Started */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h2 className="text-3xl md:text-4xl font-bold text-balance leading-tight text-white">Get Started</h2>
-                <p className="text-base text-white/60 text-pretty">
+            <div className="space-y-4 lg:space-y-6">
+              <div className="space-y-2 lg:space-y-3">
+                <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-balance leading-tight text-white">Get Started</h2>
+                <p className="text-base lg:text-lg text-white/60 text-pretty">
                   Create a room, join a friend, or play solo
                 </p>
               </div>
@@ -204,37 +204,37 @@ export function LandingPageContent() {
                   setActiveTab(value as Tab);
                   setError(null);
                 }} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 rounded-none border-b border-white/10 bg-black h-10">
+                  <TabsList className="grid w-full grid-cols-3 rounded-none border-b border-white/10 bg-black h-10 lg:h-12">
                     <TabsTrigger
                       value="create"
-                      className="gap-1.5 text-sm data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
+                      className="gap-1.5 text-sm lg:text-base data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
                     >
-                      <Users className="w-3.5 h-3.5" />
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                       <span className="hidden sm:inline">Create Room</span>
                       <span className="sm:hidden">Create</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="join"
-                      className="gap-1.5 text-sm data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
+                      className="gap-1.5 text-sm lg:text-base data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
                     >
-                      <Users className="w-3.5 h-3.5" />
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                       <span className="hidden sm:inline">Join Room</span>
                       <span className="sm:hidden">Join</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="solo"
-                      className="gap-1.5 text-sm data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
+                      className="gap-1.5 text-sm lg:text-base data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white py-2"
                     >
-                      <Play className="w-3.5 h-3.5" />
+                      <Play className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                       <span className="hidden sm:inline">Play Solo</span>
                       <span className="sm:hidden">Solo</span>
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="create" className="p-4 space-y-4">
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="create-name" className="text-white text-sm">
+                  <TabsContent value="create" className="p-4 lg:p-6 space-y-4 lg:space-y-5">
+                    <div className="space-y-3 lg:space-y-4">
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="create-name" className="text-white text-sm lg:text-base">
                           Your Name
                         </Label>
                         <Input
@@ -243,11 +243,11 @@ export function LandingPageContent() {
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
                           placeholder="Enter your name"
-                          className="h-9 bg-black border-white/20 text-white placeholder:text-white/40 text-sm"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="create-room-name" className="text-white text-sm">
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="create-room-name" className="text-white text-sm lg:text-base">
                           Room Name
                         </Label>
                         <Input
@@ -256,7 +256,7 @@ export function LandingPageContent() {
                           value={roomName}
                           onChange={(e) => setRoomName(e.target.value)}
                           placeholder="Enter room name"
-                          className="h-9 bg-black border-white/20 text-white placeholder:text-white/40 text-sm"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
                         />
                       </div>
                       <div>
@@ -276,17 +276,17 @@ export function LandingPageContent() {
                     <Button
                       onClick={handleCreateRoom}
                       disabled={loading}
-                      className="w-full h-9 text-sm font-medium bg-white text-black hover:bg-white/90"
+                      className="w-full h-9 lg:h-11 text-sm lg:text-base font-medium bg-white text-black hover:bg-white/90"
                     >
-                      <Users className="w-3.5 h-3.5 mr-2" />
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-2" />
                       {loading ? 'Creating...' : 'Create Room'}
                     </Button>
                   </TabsContent>
 
-                  <TabsContent value="join" className="p-4 space-y-4">
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="join-name" className="text-white text-sm">
+                  <TabsContent value="join" className="p-4 lg:p-6 space-y-4 lg:space-y-5">
+                    <div className="space-y-3 lg:space-y-4">
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="join-name" className="text-white text-sm lg:text-base">
                           Your Name
                         </Label>
                         <Input
@@ -295,11 +295,11 @@ export function LandingPageContent() {
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
                           placeholder="Enter your name"
-                          className="h-9 bg-black border-white/20 text-white placeholder:text-white/40 text-sm"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="join-room-code" className="text-white text-sm">
+                      <div className="space-y-1.5 lg:space-y-2">
+                        <Label htmlFor="join-room-code" className="text-white text-sm lg:text-base">
                           Room Code
                         </Label>
                         <Input
@@ -308,7 +308,7 @@ export function LandingPageContent() {
                           value={roomCode}
                           onChange={(e) => setRoomCode(e.target.value)}
                           placeholder="Enter room code"
-                          className="h-9 bg-black border-white/20 text-white placeholder:text-white/40 text-sm"
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
                         />
                       </div>
                       <div>
@@ -322,14 +322,14 @@ export function LandingPageContent() {
                     <Button
                       onClick={handleJoinRoom}
                       disabled={loading || !roomCode.trim()}
-                      className="w-full h-9 text-sm font-medium bg-white text-black hover:bg-white/90"
+                      className="w-full h-9 lg:h-11 text-sm lg:text-base font-medium bg-white text-black hover:bg-white/90"
                     >
-                      <Users className="w-3.5 h-3.5 mr-2" />
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-2" />
                       {loading ? 'Joining...' : 'Join Room'}
                     </Button>
                   </TabsContent>
 
-                  <TabsContent value="solo" className="p-4 space-y-4">
+                  <TabsContent value="solo" className="p-4 lg:p-6 space-y-4 lg:space-y-5">
                     <div>
                       <SynthSelector
                         value={synthType}
@@ -339,9 +339,9 @@ export function LandingPageContent() {
                     </div>
                     <Button
                       onClick={handlePlaySolo}
-                      className="w-full h-9 text-sm font-medium bg-white text-black hover:bg-white/90"
+                      className="w-full h-9 lg:h-11 text-sm lg:text-base font-medium bg-white text-black hover:bg-white/90"
                     >
-                      <Play className="w-3.5 h-3.5 mr-2" />
+                      <Play className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-2" />
                       Start Solo Game
                     </Button>
                   </TabsContent>
@@ -357,13 +357,13 @@ export function LandingPageContent() {
 
             {/* Right Column - About */}
             <div className="lg:sticky lg:top-20">
-              <Card className="border-white/10 shadow-2xl p-6 space-y-4 bg-zinc-950">
-                <div className="space-y-1.5">
-                  <h3 className="text-xl font-bold text-balance text-white">64 Squares</h3>
+              <Card className="border-white/10 shadow-2xl p-6 lg:p-8 space-y-4 lg:space-y-5 bg-zinc-950">
+                <div className="space-y-1.5 lg:space-y-2">
+                  <h3 className="text-xl lg:text-2xl font-bold text-balance text-white">64 Squares</h3>
                   <div className="h-0.5 w-full bg-white rounded-full" />
                 </div>
 
-                <div className="space-y-2.5 text-white/70 leading-relaxed text-sm">
+                <div className="space-y-2.5 lg:space-y-3 text-white/70 leading-relaxed text-sm lg:text-base">
                   <p>
                     64 Squares is a virtual chess board which utilises an 8 note scale to represent the columns on a
                     chess board: A, B (bflat in German), C, D, E, F G, H (b in German).
@@ -385,9 +385,9 @@ export function LandingPageContent() {
         </main>
 
         {/* Footer */}
-        <footer className="container mx-auto px-4 py-10">
+        <footer className="container mx-auto px-4 py-6 lg:py-8">
           <div className="flex justify-center items-center">
-            <p className="text-sm text-white/60">
+            <p className="text-sm lg:text-base text-white/60">
               Created by{' '}
               <a
                 href="https://giacomofargion.com"

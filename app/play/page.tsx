@@ -12,6 +12,15 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function PlayPage() {
   const searchParams = useSearchParams();
@@ -20,6 +29,7 @@ export default function PlayPage() {
   const [game] = useState(() => new ChessGame());
   const [synthType, setSynthType] = useState<SynthType>(synthFromUrl || 'Synth');
   const [gameState, setGameState] = useState(() => game.getGameState());
+  const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const audioEngine = useAudioEngine(synthType, 'w'); // Always use 'w' for audio, doesn't matter in solo play
 
   // Set up audio triggers when audio engine is ready
@@ -36,7 +46,19 @@ export default function PlayPage() {
 
   const handleEnableAudio = async () => {
     await audioEngine.initializeAudio();
+    setShowAudioPrompt(false); // Close the dialog when audio is enabled
   };
+
+  // Show audio prompt dialog when page loads and audio is not initialized
+  useEffect(() => {
+    if (!audioEngine.isInitialized && !showAudioPrompt) {
+      // Small delay to ensure the page is fully rendered
+      const timer = setTimeout(() => {
+        setShowAudioPrompt(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [audioEngine.isInitialized, showAudioPrompt]);
 
   const handleMove = (from: Square, to: Square) => {
     // For solo play, allow moves for whichever side's turn it is
@@ -62,19 +84,17 @@ export default function PlayPage() {
         {/* Header */}
         <header className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">♞</span>
-            <h1 className="text-2xl font-bold">64 Squares</h1>
           </div>
-          <Button variant="ghost" asChild>
-            <Link href="/">Back to Home</Link>
-          </Button>
+          <Button variant="ghost" asChild className="text-base">
+              <Link href="/">Back to Home</Link>
+            </Button>
         </header>
 
         <div className="max-w-4xl mx-auto">
           <Card>
             <CardHeader className="pb-4">
               <CardTitle className="text-center text-2xl">Solo Play</CardTitle>
-              <CardDescription className="text-center text-base">Play against yourself</CardDescription>
+              {/* <CardDescription className="text-center text-base">Play against yourself</CardDescription> */}
             </CardHeader>
             <CardContent className="space-y-4">
               <SynthSelector
@@ -83,16 +103,22 @@ export default function PlayPage() {
                 label="Synth Choice"
               />
 
-              {!audioEngine.isInitialized && (
-                <Alert>
-                  <AlertDescription className="mb-3">
-                    <strong>Audio disabled:</strong> Click below to enable sound.
-                  </AlertDescription>
-                  <Button onClick={handleEnableAudio} size="sm">
-                    🎵 Enable Audio
-                  </Button>
-                </Alert>
-              )}
+              {/* Audio prompt dialog - shows when player starts solo mode */}
+              <AlertDialog open={showAudioPrompt} onOpenChange={setShowAudioPrompt}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Enable Audio</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Please enable audio.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogAction onClick={handleEnableAudio} className="border-2 border-input">
+                      Enable Audio
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
               <div className="flex justify-center">
                 <Board

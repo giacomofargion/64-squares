@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inconsolata } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +13,13 @@ const inconsolata = Inconsolata({
 export const metadata: Metadata = {
   title: "64 Squares - Virtual Musical Chess Board",
   description: "A virtual chess board that creates music using an 8-note scale. Play solo or with friends.",
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

@@ -44,9 +44,12 @@ export default function MatchPage() {
   const [whitePlayerName, setWhitePlayerName] = useState<string | null>(null);
   const [blackPlayerName, setBlackPlayerName] = useState<string | null>(null);
   const [roomEndedMessage, setRoomEndedMessage] = useState<string | null>(null);
+  const [opponentJoinedMessage, setOpponentJoinedMessage] = useState<string | null>(null);
   const [roomCodeCopied, setRoomCodeCopied] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const previousMatchStatusRef = useRef<string | null>(null);
+  const previousWhitePlayerNameRef = useRef<string | null>(null);
+  const previousBlackPlayerNameRef = useRef<string | null>(null);
   const [gameStateKey, setGameStateKey] = useState(0); // Force re-render when game state changes
   const appliedMovesRef = useRef<Set<number>>(new Set()); // Track which moves have been applied
   const audioEngineRef = useRef<ReturnType<typeof useDualAudioEngine> | null>(null); // Reference to audio engine for use in callbacks
@@ -226,13 +229,37 @@ export default function MatchPage() {
         }
       }
 
+      // Detect when opponent joins by checking if a player name appears that wasn't there before
+      // Only show join message if match is active and opponent just joined (not finished)
+      if (currentUserName && updatedMatch.status !== 'finished' && updatedMatch.status === 'active') {
+        const isWhite = updatedMatch.white_player_name === currentUserName;
+        const isBlack = updatedMatch.black_player_name === currentUserName;
+
+        // Only show join message if opponent name just appeared (wasn't there before)
+        // Check refs BEFORE updating them to detect the join event
+        // This prevents false positives when moves are made (refs will already be set)
+        if (isWhite && updatedMatch.black_player_name && !previousBlackPlayerNameRef.current) {
+          // We're white, opponent (black) just joined
+          setOpponentJoinedMessage(`${updatedMatch.black_player_name} has joined the room!`);
+          // Auto-dismiss after 4 seconds
+          setTimeout(() => setOpponentJoinedMessage(null), 4000);
+        } else if (isBlack && updatedMatch.white_player_name && !previousWhitePlayerNameRef.current) {
+          // We're black, opponent (white) just joined
+          setOpponentJoinedMessage(`${updatedMatch.white_player_name} has joined the room!`);
+          // Auto-dismiss after 4 seconds
+          setTimeout(() => setOpponentJoinedMessage(null), 4000);
+        }
+      }
+
       // Update player names when match updates (e.g., when opponent joins)
       // This ensures the creator sees the opponent's name when they join
       if (updatedMatch.white_player_name) {
         setWhitePlayerName(updatedMatch.white_player_name);
+        previousWhitePlayerNameRef.current = updatedMatch.white_player_name;
       }
       if (updatedMatch.black_player_name) {
         setBlackPlayerName(updatedMatch.black_player_name);
+        previousBlackPlayerNameRef.current = updatedMatch.black_player_name;
       }
 
       // Check if room was ended by creator
@@ -407,6 +434,9 @@ export default function MatchPage() {
         // Set player names for display
         setWhitePlayerName(match.white_player_name || null);
         setBlackPlayerName(match.black_player_name || null);
+        // Initialize previous player name refs to track joins
+        previousWhitePlayerNameRef.current = match.white_player_name || null;
+        previousBlackPlayerNameRef.current = match.black_player_name || null;
 
         // Initialize game from match FEN
         const chessGame = new ChessGame(match.current_fen);
@@ -630,13 +660,17 @@ export default function MatchPage() {
   const handleEndRoom = async () => {
     if (!match || !isCreator) return;
 
-    // Delete the match (moves and chat messages will be deleted automatically via CASCADE)
+    // First update match status to 'finished' so other players see the message
+    // This will trigger the realtime update that shows roomEndedMessage
     await supabase
       .from('matches')
-      .delete()
+      .update({ status: 'finished' })
       .eq('id', matchId);
 
-    router.push('/');
+    // Wait a moment for the realtime update to propagate, then redirect
+    setTimeout(() => {
+      router.push('/');
+    }, 1000);
   };
 
 
@@ -688,26 +722,28 @@ export default function MatchPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-4 overflow-x-hidden">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="flex justify-between items-center mb-6">
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div className="flex items-center gap-3">
           </div>
-          <div className="flex gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center w-full sm:w-auto">
             <div className="flex items-center gap-2">
-              <span className="text-base text-muted-foreground">Room Code:</span>
-              <Badge variant="outline" className="font-mono text-base px-3 py-1.5">{roomCode}</Badge>
+              <span className="text-sm sm:text-base text-muted-foreground">Room Code:</span>
+              <Badge variant="outline" className="font-mono text-sm sm:text-base px-3 py-1.5">{roomCode}</Badge>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     onClick={handleCopyRoomCode}
+                    size="sm"
+                    className="h-8 w-8 p-0"
                   >
                     {roomCodeCopied ? (
-                      <Check className="h-5 w-5 text-green-500" />
+                      <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                     ) : (
-                      <Copy className="h-5 w-5" />
+                      <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
                     )}
                   </Button>
                 </TooltipTrigger>
@@ -716,27 +752,27 @@ export default function MatchPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Button variant="ghost" asChild className="text-base">
+            <Button variant="ghost" asChild className="text-sm sm:text-base">
               <Link href="/">Back to Home</Link>
             </Button>
           </div>
         </header>
 
         {/* Player Names and Room Name */}
-        <div className="text-center mb-6">
-          <h2 className="text-4xl font-bold mb-2">
+        <div className="text-center mb-4 sm:mb-6">
+          <h2 className="text-2xl sm:text-4xl font-bold mb-2">
             {getPlayerDisplayName('w')} vs {getPlayerDisplayName('b')}
           </h2>
           {match.room_name && (
-            <p className="text-lg text-muted-foreground">{match.room_name}</p>
+            <p className="text-sm sm:text-lg text-muted-foreground">{match.room_name}</p>
           )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
-          {/* Main board area - 70% width */}
+          {/* Main board area - 70% width on desktop */}
           <div className="lg:col-span-7 space-y-4">
             <Card>
-              <CardContent className="pt-6 space-y-4">
+              <CardContent className="pt-4 sm:pt-6 space-y-4">
             {gameState.isCheckmate && (
               <Alert>
                 <AlertTitle>Checkmate!</AlertTitle>
@@ -756,6 +792,13 @@ export default function MatchPage() {
             {match.status === 'waiting' && (
               <Alert>
                 <AlertDescription>Waiting for opponent to join...</AlertDescription>
+              </Alert>
+            )}
+
+            {opponentJoinedMessage && (
+              <Alert>
+                <AlertTitle>👋 Player Joined</AlertTitle>
+                <AlertDescription>{opponentJoinedMessage}</AlertDescription>
               </Alert>
             )}
 
@@ -875,9 +918,9 @@ export default function MatchPage() {
             </Card>
           </div>
 
-          {/* Sidebar with chat - 30% width */}
+          {/* Sidebar with chat - 30% width on desktop, full width on mobile */}
           <div className="lg:col-span-3">
-            <div className="h-[600px]">
+            <div className="lg:h-[600px]">
               <ChatRoom
                 messages={chatMessages}
                 onSendMessage={(msg) => sendMessage(msg, userName)}

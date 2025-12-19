@@ -195,7 +195,7 @@ export function LandingPageContent() {
   return (
     <div className="min-h-screen bg-black relative">
       {/* Gradient Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/50 via-black to-zinc-900/50 pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/60 via-black to-zinc-900/50 pointer-events-none" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800/20 via-black to-black pointer-events-none" />
 
       {/* Content */}
@@ -389,7 +389,7 @@ export function LandingPageContent() {
 
                   <p>
                     As the pieces move around the board, they trigger various tones which have different durations,
-                    creating overlaps. Experiment with the different synthesizer types to see how the sound changes.
+                    creating overlaps. Experiment with the different synthesizers.
                   </p>
                 </div>
               </Card>

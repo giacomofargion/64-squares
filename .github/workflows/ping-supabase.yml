@@ -18,6 +18,17 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
+          # Validate that required environment variables are set
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "Error: SUPABASE_URL secret is not set. Please add it in Settings > Secrets and variables > Actions" >&2
+            exit 1
+          fi
+
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Error: SUPABASE_SERVICE_ROLE_KEY secret is not set. Please add it in Settings > Secrets and variables > Actions" >&2
+            exit 1
+          fi
+
           # Ping Supabase by querying the matches table
           response=$(curl -s \
             -X GET "${SUPABASE_URL}/rest/v1/matches?select=id&limit=1" \
@@ -26,7 +37,7 @@ jobs:
             -H "Content-Type: application/json")
 
           if [ -z "$response" ]; then
-            echo "Error: empty response when pinging." >&2
+            echo "Error: empty response when pinging Supabase. Check your SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." >&2
             exit 1
           fi
 

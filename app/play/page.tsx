@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Board } from '@/components/chess/Board';
 import { ChessGame } from '@/lib/chess/game';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
 import { SynthSelector } from '@/components/audio/SynthSelector';
+import { AudioTransport } from '@/components/audio/AudioTransport';
 import type { SynthType } from '@/types/audio';
 import type { Square } from '@/types/chess';
 import Link from 'next/link';
+import { Volume2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -30,6 +32,7 @@ function PlayPageContent() {
   const [synthType, setSynthType] = useState<SynthType>(synthFromUrl || 'Synth');
   const [gameState, setGameState] = useState(() => game.getGameState());
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+  const audioPromptDismissedRef = useRef(false);
   const audioEngine = useAudioEngine(synthType, 'w'); // Always use 'w' for audio, doesn't matter in solo play
 
   // Set up audio triggers when audio engine is ready
@@ -49,16 +52,22 @@ function PlayPageContent() {
     setShowAudioPrompt(false); // Close the dialog when audio is enabled
   };
 
-  // Show audio prompt dialog when page loads and audio is not initialized
+  // Offer the dialog once. Dismissing it (including Escape) must not start
+  // audio; the header button stays available until the context is running.
   useEffect(() => {
-    if (!audioEngine.isInitialized && !showAudioPrompt) {
-      // Small delay to ensure the page is fully rendered
-      const timer = setTimeout(() => {
-        setShowAudioPrompt(true);
-      }, 500);
-      return () => clearTimeout(timer);
+    if (audioEngine.isInitialized || audioPromptDismissedRef.current) return;
+    const timer = setTimeout(() => {
+      setShowAudioPrompt(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [audioEngine.isInitialized]);
+
+  const handleAudioPromptOpenChange = (open: boolean) => {
+    if (!open) {
+      audioPromptDismissedRef.current = true;
     }
-  }, [audioEngine.isInitialized, showAudioPrompt]);
+    setShowAudioPrompt(open);
+  };
 
   const handleMove = (from: Square, to: Square) => {
     // For solo play, allow moves for whichever side's turn it is
@@ -79,11 +88,24 @@ function PlayPageContent() {
   const currentTurn = gameState.turn;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-background p-2 sm:p-4">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-3">
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {!audioEngine.isInitialized && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleEnableAudio}
+                aria-label="Enable audio"
+              >
+                <Volume2 />
+                Enable audio
+              </Button>
+            )}
+            <AudioTransport onStop={audioEngine.stopAll} />
           </div>
           <Button variant="ghost" asChild className="text-base">
               <Link href="/">Back to Home</Link>
@@ -96,20 +118,22 @@ function PlayPageContent() {
               <CardTitle className="text-center text-2xl">Solo Play</CardTitle>
               {/* <CardDescription className="text-center text-base">Play against yourself</CardDescription> */}
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="px-0 sm:px-6 space-y-4">
+              <div className="px-2 sm:px-0">
               <SynthSelector
                 value={synthType}
                 onChange={setSynthType}
                 label="Synth Choice"
               />
+              </div>
 
               {/* Audio prompt dialog - shows when player starts solo mode */}
-              <AlertDialog open={showAudioPrompt} onOpenChange={setShowAudioPrompt}>
+              <AlertDialog open={showAudioPrompt} onOpenChange={handleAudioPromptOpenChange}>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Enable Audio</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Please enable audio.
+                      Your browser only plays sound after a tap. Each move plays a note that rings for about 20 seconds.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -129,14 +153,14 @@ function PlayPageContent() {
                 />
               </div>
 
-              <div className="flex justify-center gap-4">
+              <div className="flex justify-center gap-4 px-2 sm:px-0">
                 <Button onClick={handleReset} variant="outline">
                   Reset Game
                 </Button>
               </div>
 
               {gameState.isCheckmate && (
-                <Alert>
+                <Alert className="mx-2 sm:mx-0">
                   <AlertDescription className="text-center text-lg font-semibold">
                     Checkmate! {gameState.turn === 'w' ? 'Black' : 'White'} wins!
                   </AlertDescription>
@@ -144,7 +168,7 @@ function PlayPageContent() {
               )}
 
               {gameState.isStalemate && (
-                <Alert>
+                <Alert className="mx-2 sm:mx-0">
                   <AlertDescription className="text-center text-lg font-semibold">
                     Stalemate! The game is a draw.
                   </AlertDescription>

@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { SynthSelector } from '@/components/audio/SynthSelector';
 import { getGuestName, setGuestName } from '@/lib/guestSession';
-import { normalizeRoomCode } from '@/lib/roomCode';
-import { generateRoomCode } from '@/lib/roomCode';
+import { normalizeRoomCode, parseRoomCodeInput } from '@/lib/roomCode';
 import type { SynthType } from '@/types/audio';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
@@ -14,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Users, Play } from 'lucide-react';
 
 type Tab = 'create' | 'join' | 'solo';
@@ -28,13 +26,18 @@ export function LandingPageContent() {
   const [synthType, setSynthType] = useState<SynthType>('Synth');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
 
   useEffect(() => {
     // Get guest name from sessionStorage
     const guestName = getGuestName();
     if (guestName) {
       setUsername(guestName);
+    }
+
+    const joinCode = new URLSearchParams(window.location.search).get('join');
+    if (joinCode) {
+      setActiveTab('join');
+      setRoomCode(joinCode);
     }
   }, []);
 
@@ -71,9 +74,6 @@ export function LandingPageContent() {
       if (createError) throw createError;
 
       if (data) {
-        const shortCode = generateRoomCode(data.id);
-        setCreatedRoomCode(shortCode);
-        // Redirect to match page
         router.push(`/match/${data.id}`);
       }
     } catch (err) {
@@ -88,7 +88,8 @@ export function LandingPageContent() {
       setError('Please enter your name');
       return;
     }
-    if (!roomCode.trim()) {
+    const roomCodeInput = parseRoomCodeInput(roomCode);
+    if (!roomCodeInput) {
       setError('Please enter a room code');
       return;
     }
@@ -98,7 +99,7 @@ export function LandingPageContent() {
 
     try {
       // Normalize room code (accepts both short codes and full UUIDs)
-      const matchId = await normalizeRoomCode(supabase, roomCode.trim());
+      const matchId = await normalizeRoomCode(supabase, roomCodeInput);
 
       if (!matchId) {
         throw new Error('Room not found. Please check the room code.');
@@ -279,12 +280,6 @@ export function LandingPageContent() {
                           label="Synth Choice"
                         />
                       </div>
-                      {createdRoomCode && (
-                        <div className="p-2 bg-black/50 rounded-lg border border-white/10">
-                          <p className="text-xs text-white/60 mb-1">Generated Room Code:</p>
-                          <Badge variant="outline" className="text-sm font-mono bg-black border-white/20 text-white">{createdRoomCode}</Badge>
-                        </div>
-                      )}
                     </div>
                     <Button
                       onClick={handleCreateRoom}
@@ -321,7 +316,10 @@ export function LandingPageContent() {
                           value={roomCode}
                           onChange={(e) => setRoomCode(e.target.value)}
                           placeholder="Enter room code"
-                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base"
+                          autoCapitalize="off"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          className="h-9 lg:h-11 bg-black border-white/20 text-white placeholder:text-white/40 text-sm lg:text-base font-mono"
                         />
                       </div>
                       <div>

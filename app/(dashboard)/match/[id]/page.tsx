@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { Board } from '@/components/chess/Board';
 import { ChatRoom } from '@/components/chat/ChatRoom';
-import { ChessGame } from '@/lib/chess/game';
+import { ChessGame, INITIAL_FEN, findConnectingMove } from '@/lib/chess/game';
 import { useRealtimeMatch } from '@/hooks/useRealtimeMatch';
 import { useDualAudioEngine } from '@/hooks/useDualAudioEngine';
 import { getGuestName } from '@/lib/guestSession';
@@ -51,19 +51,43 @@ export default function MatchPage() {
   const previousWhitePlayerNameRef = useRef<string | null>(null);
   const previousBlackPlayerNameRef = useRef<string | null>(null);
   const [gameStateKey, setGameStateKey] = useState(0); // Force re-render when game state changes
-  const appliedMovesRef = useRef<Set<number>>(new Set()); // Track which moves have been applied
   const audioEngineRef = useRef<ReturnType<typeof useDualAudioEngine> | null>(null); // Reference to audio engine for use in callbacks
   const gameRef = useRef<ChessGame | null>(null); // Reference to game for use in callbacks
   const matchRef = useRef<Match | null>(null); // Reference to match for use in callbacks
   const userNameRef = useRef<string | null>(null); // Reference to userName (guest name) for use in callbacks
-  const setGameStateKeyRef = useRef(setGameStateKey); // Ref to setGameStateKey for use in callbacks
   const lastAppliedMoveTimeRef = useRef<number>(0); // Track when we last applied a move to prevent FEN overwrite
   const isApplyingMoveRef = useRef<boolean>(false); // Flag to prevent FEN sync during move application
   const isInitializingRef = useRef<boolean>(false); // Flag to prevent FEN sync during initialization
 
-  // Update refs when state changes
-  useEffect(() => {
-    setGameStateKeyRef.current = setGameStateKey;
+  // Every position that comes from the other player goes through here, whether it
+  // arrived as a move record or as a match FEN update. Whichever message lands first
+  // advances the board and plays the note; the other one finds the position already
+  // on the board and does nothing. That way a dropped move record only changes which
+  // message plays the note instead of losing the sound altogether.
+  const advanceToRemotePosition = useCallback((nextFen: string) => {
+    const currentGame = gameRef.current;
+    if (!currentGame || currentGame.getFen() === nextFen) return;
+
+    const playedMove = findConnectingMove(currentGame.getFen(), nextFen);
+
+    if (!currentGame.loadFen(nextFen)) {
+      console.warn('Ignoring unusable FEN from realtime update:', nextFen);
+      return;
+    }
+    setGameStateKey(prev => prev + 1);
+
+    if (!playedMove) return;
+
+    const audioEngine = audioEngineRef.current;
+    if (!audioEngine?.isReady) {
+      console.log('Audio not ready, skipping note for opponent move to', playedMove.to);
+      return;
+    }
+
+    audioEngine.triggerOpponentSquareNote(playedMove.to);
+    if (playedMove.captured) {
+      audioEngine.triggerOpponentRowCapture(parseInt(playedMove.to[1], 10));
+    }
   }, []);
 
   // Create stable callback refs
@@ -73,128 +97,40 @@ export default function MatchPage() {
   // Update callback refs
   useEffect(() => {
     onMoveRef.current = (move: MoveRecord) => {
-      console.log('onMove callback triggered:', move);
       const currentGame = gameRef.current;
-      const currentUserName = userNameRef.current;
       const currentMatch = matchRef.current;
 
       if (!currentGame) {
-        console.log('Skipping move: game not ready', { game: !!currentGame });
+        console.log('Skipping move: game not ready');
         return;
       }
 
-      // Skip if this move was made by the current user (already applied locally)
-      // Check by player_name
-      const isOwnMove = move.player_name && move.player_name === currentUserName;
-      if (isOwnMove) {
-        console.log('Skipping move: made by current user');
+      // Our own moves are played on the board and heard the moment we make them.
+      if (move.player_name && move.player_name === userNameRef.current) {
         return;
       }
 
-      // Skip if we've already applied this move
-      if (appliedMovesRef.current.has(move.move_number)) {
-        console.log('Skipping move: already applied', move.move_number);
+      // The move record only says which squares changed, so work out the position it
+      // leads to. If it does not fit our board we are out of step with the database
+      // and the match FEN is the authority.
+      const nextFen =
+        currentGame.fenAfterMove(move.move_from as Square, move.move_to as Square) ??
+        currentMatch?.current_fen;
+
+      if (!nextFen) {
+        console.warn('Opponent move does not fit the board and no match FEN to fall back on:', move);
         return;
       }
 
-      // Update applied moves count
-      appliedMovesRef.current.add(move.move_number);
-
-      console.log('Applying opponent move:', move, {
-        currentFen: currentGame.getFen(),
-        moveNumber: move.move_number,
-        playerId: move.player_id,
-      });
-
-      // Set flag to prevent FEN sync during move application
       isApplyingMoveRef.current = true;
       lastAppliedMoveTimeRef.current = Date.now();
 
-      // Get game state before move to check for captures
-      const gameStateBefore = currentGame.getGameState();
-      const pieceBefore = currentGame.getPiece(move.move_to as Square);
+      advanceToRemotePosition(nextFen);
 
-      // Validate that the move is legal before applying
-      const legalMoves = currentGame.getAllLegalMoves();
-      const isValidMove = legalMoves.some(m => m.from === move.move_from && m.to === move.move_to);
-
-      if (!isValidMove) {
-        console.warn('Opponent move is not legal!', {
-          from: move.move_from,
-          to: move.move_to,
-          currentFen: gameStateBefore.fen,
-          legalMoves: legalMoves.length,
-        });
-
-        // Try to sync from FEN instead
-        if (currentMatch?.current_fen) {
-          console.log('Attempting to sync from match FEN:', currentMatch.current_fen);
-          currentGame.loadFen(currentMatch.current_fen);
-          setGameStateKeyRef.current(prev => prev + 1);
-          isApplyingMoveRef.current = false;
-          return;
-        }
-      }
-
-      // Temporarily disable the game's onMove callback to prevent triggering own synth
-      // We'll trigger opponent synth manually instead
-      const originalCallback = currentGame.getOnMoveCallback();
-      currentGame.setOnMove(null);
-
-      // Apply the move to the game
-      const success = currentGame.makeMove(move.move_from as Square, move.move_to as Square);
-
-      // Restore the callback immediately after the move
-      if (originalCallback) {
-        currentGame.setOnMove(originalCallback);
-      }
-
-      if (success) {
-        console.log('Move applied successfully');
-        appliedMovesRef.current.add(move.move_number);
-        // Force re-render by updating key
-        setGameStateKeyRef.current(prev => prev + 1);
-
-        // Get the FEN after the move to verify it matches
-        const gameStateAfter = currentGame.getGameState();
-        console.log('Game FEN after move:', gameStateAfter.fen);
-
-        // Check if a piece was captured
-        const wasCapture = !!pieceBefore;
-        let capturedRow: number | undefined;
-        if (wasCapture) {
-          // Extract row from the destination square
-          capturedRow = parseInt(move.move_to[1]);
-        }
-
-            // Trigger audio for opponent's move (opponent synth)
-            if (audioEngineRef.current?.isReady) {
-              console.log('Triggering audio for opponent move to:', move.move_to, 'captured:', wasCapture);
-              audioEngineRef.current.triggerOpponentSquareNote(move.move_to as Square);
-              if (wasCapture && capturedRow) {
-                console.log('Triggering capture audio for row:', capturedRow);
-                audioEngineRef.current.triggerOpponentRowCapture(capturedRow);
-              }
-            } else {
-              console.log('Audio not ready, skipping audio trigger', {
-                hasAudioEngine: !!audioEngineRef.current,
-                isReady: audioEngineRef.current?.isReady,
-              });
-            }
-
-        // Clear the flag after a short delay to allow FEN sync if needed
-        setTimeout(() => {
-          isApplyingMoveRef.current = false;
-        }, 500);
-      } else {
-        console.log('Move failed, trying FEN fallback');
+      // Let the FEN sync take over again once our own update has had time to land.
+      setTimeout(() => {
         isApplyingMoveRef.current = false;
-        // If move failed, try loading from FEN as fallback
-        if (currentMatch?.current_fen) {
-          currentGame.loadFen(currentMatch.current_fen);
-          setGameStateKeyRef.current(prev => prev + 1);
-        }
-      }
+      }, 500);
     };
 
     onMatchUpdateRef.current = (updatedMatch: Match) => {
@@ -218,13 +154,13 @@ export default function MatchPage() {
       if (currentPlayerColor === 'w') {
         // We're white, opponent is black
         if (updatedMatch.black_player_synth_type) {
-          console.log('Updating opponent synth type (black):', updatedMatch.black_player_synth_type, 'current:', opponentSynthType);
+          console.log('Updating opponent synth type (black):', updatedMatch.black_player_synth_type);
           setOpponentSynthType(updatedMatch.black_player_synth_type);
         }
       } else if (currentPlayerColor === 'b') {
         // We're black, opponent is white
         if (updatedMatch.white_player_synth_type) {
-          console.log('Updating opponent synth type (white):', updatedMatch.white_player_synth_type, 'current:', opponentSynthType);
+          console.log('Updating opponent synth type (white):', updatedMatch.white_player_synth_type);
           setOpponentSynthType(updatedMatch.white_player_synth_type);
         }
       }
@@ -284,7 +220,6 @@ export default function MatchPage() {
       const currentGame = gameRef.current;
       if (currentGame && updatedMatch.current_fen) {
         const currentFen = currentGame.getFen();
-        const initialFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
         // Don't sync if we're initializing
         if (isInitializingRef.current) {
@@ -292,56 +227,30 @@ export default function MatchPage() {
           return;
         }
 
-        // Check if this is a restart (FEN reset to initial position)
-        const isRestart = updatedMatch.current_fen === initialFen && currentFen !== initialFen;
-
-        // Always sync if FENs don't match - match FEN is the source of truth
-        if (currentFen !== updatedMatch.current_fen) {
-          // If this is a restart, clear applied moves tracking immediately
-          if (isRestart) {
-            console.log('Detected game restart - clearing applied moves tracking');
-            appliedMovesRef.current.clear();
-          }
-
-          // If we just applied a move locally, give it a moment to propagate to the database
-          // But don't wait too long - if match FEN is different, it's the truth
-          // Skip the delay if this is a restart (we want immediate sync)
-          const timeSinceLastMove = Date.now() - lastAppliedMoveTimeRef.current;
-          if (!isRestart && isApplyingMoveRef.current && timeSinceLastMove < 300) {
-            console.log('Move just applied, waiting briefly before syncing', {
-              timeSinceLastMove,
-            });
-            // Check again after a short delay
-            setTimeout(() => {
-              const stillCurrentFen = gameRef.current?.getFen();
-              if (stillCurrentFen !== updatedMatch.current_fen && gameRef.current) {
-                console.log('Syncing from match FEN after move propagation delay:', updatedMatch.current_fen);
-                gameRef.current.loadFen(updatedMatch.current_fen);
-                setGameStateKeyRef.current(prev => prev + 1);
-              }
-            }, 500);
-            return;
-          }
-
-          console.log('FEN mismatch - syncing from match FEN (source of truth)', {
-            currentFen,
-            matchFen: updatedMatch.current_fen,
-            timeSinceLastMove,
-            isApplying: isApplyingMoveRef.current,
-            isRestart,
-          });
-          currentGame.loadFen(updatedMatch.current_fen);
-          setGameStateKeyRef.current(prev => prev + 1);
-        } else {
-          console.log('FEN already in sync');
+        if (currentFen === updatedMatch.current_fen) {
+          return;
         }
+
+        // Check if this is a restart (FEN reset to initial position)
+        const isRestart = updatedMatch.current_fen === INITIAL_FEN && currentFen !== INITIAL_FEN;
+
+        // If we just applied a move locally, give it a moment to propagate to the database
+        // But don't wait too long - if match FEN is different, it's the truth
+        // Skip the delay if this is a restart (we want immediate sync)
+        const timeSinceLastMove = Date.now() - lastAppliedMoveTimeRef.current;
+        if (!isRestart && isApplyingMoveRef.current && timeSinceLastMove < 300) {
+          setTimeout(() => advanceToRemotePosition(updatedMatch.current_fen), 500);
+          return;
+        }
+
+        console.log('Syncing from match FEN (source of truth):', updatedMatch.current_fen);
+        advanceToRemotePosition(updatedMatch.current_fen);
       }
     };
-  }, [opponentSynthType]); // Include opponentSynthType to update audio when it changes
+  }, [advanceToRemotePosition]);
 
   const {
     match,
-    moves,
     chatMessages,
     loading,
     error: realtimeError,
@@ -379,7 +288,6 @@ export default function MatchPage() {
         console.log('Initializing game from match:', {
           matchId: match.id,
           currentFen: match.current_fen,
-          movesCount: moves.length,
         });
 
         matchRef.current = match;
@@ -446,15 +354,6 @@ export default function MatchPage() {
         // Store initial match status
         previousMatchStatusRef.current = match.status;
 
-        // Track which moves we've seen (for duplicate detection in real-time)
-        // Don't replay moves - match FEN is the source of truth, already loaded above
-        if (moves.length > 0) {
-          console.log('Tracking existing moves for duplicate detection:', moves.length);
-          moves.forEach((move) => {
-            appliedMovesRef.current.add(move.move_number);
-          });
-        }
-
         console.log('Game initialized from match FEN (source of truth):', match.current_fen);
         setGameStateKey(prev => prev + 1);
 
@@ -466,7 +365,7 @@ export default function MatchPage() {
       }
     };
     init();
-  }, [match, router, moves, game]);
+  }, [match, router, game]);
 
   // Dual audio engine - must be declared before useEffect that uses it
   const audioEngine = useDualAudioEngine(
@@ -559,14 +458,8 @@ export default function MatchPage() {
     // This ensures correct numbering even if moves array is out of sync
     const moveNumber = game.getMoveNumber();
 
-    // Mark this move as applied locally
-    appliedMovesRef.current.add(moveNumber);
-
     // Force re-render
     setGameStateKey(prev => prev + 1);
-
-    // Clear the flag after move is saved to database
-    // This allows FEN sync to work normally after our move propagates
 
     // Save move to database
     const moveData = {
@@ -587,7 +480,6 @@ export default function MatchPage() {
       // Revert the move if save failed
       if (match?.current_fen) {
         game.loadFen(match.current_fen);
-        appliedMovesRef.current.delete(moveNumber);
         setGameStateKey(prev => prev + 1);
       }
       return;
@@ -619,16 +511,11 @@ export default function MatchPage() {
   const handleRestartGame = async () => {
     if (!match || !isCreator) return;
 
-    const initialFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-
     // Reset game state locally
     if (game) {
-      game.loadFen(initialFen);
+      game.loadFen(INITIAL_FEN);
       setGameStateKey(prev => prev + 1);
     }
-
-    // Clear applied moves tracking
-    appliedMovesRef.current.clear();
 
     // Delete all old moves from the database to ensure clean restart
     const { error: deleteError } = await supabase
@@ -645,7 +532,7 @@ export default function MatchPage() {
     const { error: updateError } = await supabase
       .from('matches')
       .update({
-        current_fen: initialFen,
+        current_fen: INITIAL_FEN,
         status: 'active',
         winner_id: null,
         finished_at: null,

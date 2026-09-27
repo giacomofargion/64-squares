@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { Match, MoveRecord, ChatMessage } from '@/types/match';
 
@@ -95,14 +95,24 @@ export function useRealtimeMatch({
     }
   }, [matchId]);
 
+  // Callers pass inline arrow functions, so these change identity on every render.
+  // They are kept in refs and deliberately left out of the subscription effect's
+  // dependencies: including them would make the effect tear the channel down and
+  // rejoin it on every render, and anything the server sends while the channel is
+  // rejoining is never delivered.
+  const onMoveRef = useRef(onMove);
+  const onMatchUpdateRef = useRef(onMatchUpdate);
+  const onChatMessageRef = useRef(onChatMessage);
+
+  useEffect(() => {
+    onMoveRef.current = onMove;
+    onMatchUpdateRef.current = onMatchUpdate;
+    onChatMessageRef.current = onChatMessage;
+  }, [onMove, onMatchUpdate, onChatMessage]);
+
   // Subscribe to match updates
   useEffect(() => {
     if (!matchId) return;
-
-    // Use refs for callbacks to avoid stale closures
-    const onMoveRef = { current: onMove };
-    const onMatchUpdateRef = { current: onMatchUpdate };
-    const onChatMessageRef = { current: onChatMessage };
 
     const channel = supabase
       .channel(`match:${matchId}`)
@@ -229,7 +239,7 @@ export function useRealtimeMatch({
       console.log('Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
-  }, [matchId, onMove, onMatchUpdate, onChatMessage]); // Include callbacks but use refs inside
+  }, [matchId]);
 
   const sendMessage = useCallback(async (message: string, userName?: string | null) => {
     if (!userName) {

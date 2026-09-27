@@ -1,6 +1,55 @@
 import { Chess } from 'chess.js';
 import type { Move, GameState, Square, Color, PieceType } from '@/types/chess';
 
+export const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+/**
+ * The parts of a FEN that identify a position: piece placement, side to move,
+ * castling rights and en passant square. The half-move and full-move counters are
+ * left out so positions can be compared regardless of how they were reached.
+ */
+function positionKey(fen: string): string {
+  return fen.split(' ').slice(0, 4).join(' ');
+}
+
+/**
+ * Finds the single legal move that turns `from` into `to`.
+ *
+ * Returns null when the positions are identical or more than one move apart, which
+ * is how a board that fell several moves behind catches up silently instead of
+ * guessing which move to announce.
+ */
+export function findConnectingMove(fromFen: string, toFen: string): Move | null {
+  const targetKey = positionKey(toFen);
+  if (positionKey(fromFen) === targetKey) {
+    return null;
+  }
+
+  let chess: Chess;
+  try {
+    chess = new Chess(fromFen);
+  } catch {
+    return null;
+  }
+
+  for (const candidate of chess.moves({ verbose: true })) {
+    chess.move({ from: candidate.from, to: candidate.to, promotion: candidate.promotion });
+    const reachesTarget = positionKey(chess.fen()) === targetKey;
+    chess.undo();
+
+    if (reachesTarget) {
+      return {
+        from: candidate.from,
+        to: candidate.to,
+        promotion: candidate.promotion as PieceType | undefined,
+        captured: candidate.captured as PieceType | undefined,
+      };
+    }
+  }
+
+  return null;
+}
+
 export class ChessGame {
   private chess: Chess;
   private onMoveCallback?: (move: Move, captured: boolean, capturedRow?: number) => void;
@@ -12,15 +61,8 @@ export class ChessGame {
   /**
    * Set callback for when a move is made
    */
-  setOnMove(callback: ((move: Move, captured: boolean, capturedRow?: number) => void) | null | undefined) {
-    this.onMoveCallback = callback || undefined;
-  }
-
-  /**
-   * Get the current onMove callback
-   */
-  getOnMoveCallback(): ((move: Move, captured: boolean, capturedRow?: number) => void) | undefined {
-    return this.onMoveCallback;
+  setOnMove(callback: (move: Move, captured: boolean, capturedRow?: number) => void) {
+    this.onMoveCallback = callback;
   }
 
   /**
@@ -81,6 +123,16 @@ export class ChessGame {
       console.error('Invalid move:', { from, to, promotion, error, fen: this.chess.fen(), turn: this.chess.turn() });
       return false;
     }
+  }
+
+  /**
+   * The FEN that would result from playing `from`-`to` in the current position, or
+   * null when that move is not legal here. Leaves this game untouched, so no move
+   * callback fires.
+   */
+  fenAfterMove(from: Square, to: Square, promotion?: string): string | null {
+    const probe = new ChessGame(this.chess.fen());
+    return probe.makeMove(from, to, promotion) ? probe.getFen() : null;
   }
 
   /**

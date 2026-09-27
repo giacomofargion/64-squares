@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { departurePlayerName } from '@/lib/match/departure';
 
 interface ChatRoomProps {
   messages: ChatMessage[];
@@ -51,7 +52,15 @@ export function ChatRoom({ messages, onSendMessage, currentUserName }: ChatRoomP
   };
 
   const scrollToBottom = (behavior: 'smooth' | 'auto' = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    // Scroll only the chat pane. scrollIntoView walks every ancestor and
+    // yanks the board (and, on mobile, the visual viewport), which is enough
+    // for some browsers to suspend the audio context.
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (viewport instanceof HTMLElement) {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior, block: 'nearest' });
   };
 
   // Handle new messages - only scroll if chat is open and user is at bottom
@@ -189,6 +198,13 @@ export function ChatRoom({ messages, onSendMessage, currentUserName }: ChatRoomP
                   <p className="text-xs text-muted-foreground text-center py-4">No messages yet. Start the conversation!</p>
                 ) : (
                   messages.map((message) => {
+                    if (departurePlayerName(message.message)) {
+                      return (
+                        <p key={message.id} className="text-center text-sm text-muted-foreground py-1">
+                          {message.message}
+                        </p>
+                      );
+                    }
                     const isOwn = isOwnMessage(message);
                     const displayName = getDisplayName(message);
                     const initials = displayName

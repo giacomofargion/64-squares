@@ -12,6 +12,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/game.test.ts', 'tests/roomCode.test.ts'],
+    include: ['tests/game.test.ts', 'tests/roomCode.test.ts', 'tests/departure.test.ts'],
   },
 });

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Tone from 'tone';
 import type { SynthType } from '@/types/audio';
 import { DualSynthGenerator } from '@/components/audio/DualSynthGenerator';
+import { resumeAudioContext } from '@/lib/audio/resumeAudioContext';
+import { useAudioContextRunning } from '@/hooks/useAudioContextRunning';
 
 export function useDualAudioEngine(
   ownSynthType: SynthType | null,
@@ -13,33 +15,34 @@ export function useDualAudioEngine(
   const [isReady, setIsReady] = useState(false);
   const dualSynthGeneratorRef = useRef<DualSynthGenerator | null>(null);
 
-  // Manual initialization function (call on user interaction)
+  const isRunning = useAudioContextRunning(isInitialized);
+
+  // A second call has to resume a context the browser suspended after the
+  // first enable (chat focus, background tab). Returning early left the
+  // player with no way to start sound again.
   const initializeAudio = useCallback(async () => {
-    if (isInitialized || !ownSynthType) return false; // Only need own synth type to initialize
+    if (!ownSynthType) return false;
 
     try {
-      // Start Tone.js context (requires user interaction)
       await Tone.start();
-      setIsInitialized(true);
-      return true;
+      if (!dualSynthGeneratorRef.current) {
+        dualSynthGeneratorRef.current = new DualSynthGenerator(
+          ownSynthType || 'Synth',
+          opponentSynthType || 'Synth'
+        );
+      }
+      if (!isInitialized) setIsInitialized(true);
+      setIsReady(true);
+      return Tone.getContext().rawContext.state === 'running';
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
       return false;
     }
-  }, [isInitialized, ownSynthType]);
-
-  // Latest requested synth types, so the generator can be seeded with them without
-  // making its creation depend on them. Declared before the creation effect so this
-  // effect runs first and the refs are current when the generator is built.
-  const ownSynthTypeRef = useRef(ownSynthType);
-  const opponentSynthTypeRef = useRef(opponentSynthType);
+  }, [isInitialized, ownSynthType, opponentSynthType]);
 
   // Apply synth type changes in place. Each side is swapped independently, so
   // changing one instrument leaves the other side's ringing notes alone.
   useEffect(() => {
-    ownSynthTypeRef.current = ownSynthType;
-    opponentSynthTypeRef.current = opponentSynthType;
-
     const generator = dualSynthGeneratorRef.current;
     if (!generator) return;
 
@@ -51,49 +54,37 @@ export function useDualAudioEngine(
     }
   }, [ownSynthType, opponentSynthType]);
 
-  // The generator owns the Tone.js nodes for both players, so it is built once when
-  // audio starts and only disposed when audio is torn down. Rebuilding it on every
-  // synth type change used to cut off every note still ringing, including the
-  // opponent's, and the opponent's type changes as soon as they join a match.
+  // Built from the enable click, not from an effect, so a match update cannot
+  // tear the graph down and silence whoever is still ringing. Disposal waits
+  // until the page actually unmounts.
   useEffect(() => {
-    if (!isInitialized) return;
-
-    dualSynthGeneratorRef.current = new DualSynthGenerator(
-      ownSynthTypeRef.current || 'Synth',
-      opponentSynthTypeRef.current || 'Synth'
-    );
-    setIsReady(true);
-
     return () => {
       dualSynthGeneratorRef.current?.dispose();
       dualSynthGeneratorRef.current = null;
-      setIsReady(false);
     };
-  }, [isInitialized]);
+  }, []);
 
   const triggerOwnSquareNote = useCallback((square: string) => {
-    if (dualSynthGeneratorRef.current && isReady) {
-      dualSynthGeneratorRef.current.triggerOwnSquareNote(square);
-    }
-  }, [isReady]);
+    // Incoming and local notes both try to wake a suspended context. Chrome
+    // accepts that after the original gesture; iOS still needs the Resume tap.
+    resumeAudioContext();
+    dualSynthGeneratorRef.current?.triggerOwnSquareNote(square);
+  }, []);
 
   const triggerOpponentSquareNote = useCallback((square: string) => {
-    if (dualSynthGeneratorRef.current && isReady) {
-      dualSynthGeneratorRef.current.triggerOpponentSquareNote(square);
-    }
-  }, [isReady]);
+    resumeAudioContext();
+    dualSynthGeneratorRef.current?.triggerOpponentSquareNote(square);
+  }, []);
 
   const triggerOwnRowCapture = useCallback((row: number) => {
-    if (dualSynthGeneratorRef.current && isReady) {
-      dualSynthGeneratorRef.current.triggerOwnRowCapture(row);
-    }
-  }, [isReady]);
+    resumeAudioContext();
+    dualSynthGeneratorRef.current?.triggerOwnRowCapture(row);
+  }, []);
 
   const triggerOpponentRowCapture = useCallback((row: number) => {
-    if (dualSynthGeneratorRef.current && isReady) {
-      dualSynthGeneratorRef.current.triggerOpponentRowCapture(row);
-    }
-  }, [isReady]);
+    resumeAudioContext();
+    dualSynthGeneratorRef.current?.triggerOpponentRowCapture(row);
+  }, []);
 
   const stopAll = useCallback(() => {
     if (dualSynthGeneratorRef.current) {
@@ -130,6 +121,7 @@ export function useDualAudioEngine(
   return {
     isReady,
     isInitialized,
+    isRunning,
     initializeAudio,
     triggerOwnSquareNote,
     triggerOpponentSquareNote,

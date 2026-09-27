@@ -122,7 +122,8 @@ export function createFakeSupabase({ port, bundles, apikeyToDevice, log, activat
     if (url.pathname === '/rest/v1/chat_messages') {
       if (req.method === 'GET') return send(200, db.chatMessages);
       if (req.method === 'POST') {
-        return readBody(req).then((row) => {
+        return readBody(req).then((body) => {
+          const row = Array.isArray(body) ? body[0] : body;
           const stored = { ...row, id: `msg-${db.chatMessages.length + 1}`, created_at: new Date().toISOString() };
           db.chatMessages.push(stored);
           pushChange('chat_messages', 'INSERT', stored);

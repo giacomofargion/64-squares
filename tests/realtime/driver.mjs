@@ -335,6 +335,27 @@ try {
     }
   }
 
+  log('server', '--- Bob returns home ---');
+  const left = await bob.page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')].find((el) => el.textContent?.includes('Back to Home'));
+    if (!button) return false;
+    button.click();
+    return true;
+  });
+  if (!left) {
+    fail('Bob has no Back to Home button');
+  } else {
+    try {
+      await alice.page.waitForFunction(
+        () => document.body.textContent?.includes('Bob has left the room.'),
+        { timeout: 5000 }
+      );
+      log('server', 'PASS Alice saw that Bob left the room');
+    } catch {
+      fail('Alice was not told that Bob left the room');
+    }
+  }
+
   clearInterval(sampler);
   sampler = undefined;
 

@@ -55,6 +55,27 @@ export function isValidUUID(str: string): boolean {
 }
 
 /**
+ * Turn whatever was typed or pasted into a room code or match UUID.
+ * A full invite URL (`/?join=`) is unwrapped. Spaces are removed.
+ * Short codes and full UUIDs are left intact for lookup.
+ */
+export function parseRoomCodeInput(raw: string): string {
+  const compact = raw.trim().replace(/\s+/g, '');
+  if (!compact) return '';
+
+  const withoutHash = compact.split('#')[0] ?? compact;
+  const queryIndex = withoutHash.indexOf('?');
+  if (queryIndex !== -1) {
+    const join = new URLSearchParams(withoutHash.slice(queryIndex + 1)).get('join');
+    if (join) {
+      return join.trim().replace(/\s+/g, '');
+    }
+  }
+
+  return compact;
+}
+
+/**
  * Normalize room code input - accepts both short codes and full UUIDs
  * Returns the full UUID if found, or null if not found
  */

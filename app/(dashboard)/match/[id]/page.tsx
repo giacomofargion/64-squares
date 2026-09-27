@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -9,13 +9,15 @@ import { ChatRoom } from '@/components/chat/ChatRoom';
 import { ChessGame, INITIAL_FEN, findConnectingMove } from '@/lib/chess/game';
 import { useRealtimeMatch } from '@/hooks/useRealtimeMatch';
 import { useDualAudioEngine } from '@/hooks/useDualAudioEngine';
+import { AudioTransport } from '@/components/audio/AudioTransport';
 import { getGuestName } from '@/lib/guestSession';
 import { generateRoomCode } from '@/lib/roomCode';
-import type { Match, MoveRecord } from '@/types/match';
+import type { Match, MatchStatus, MoveRecord } from '@/types/match';
 import type { Square } from '@/types/chess';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -28,8 +30,67 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Share2, Volume2 } from 'lucide-react';
+
+type InviteCopyState = 'idle' | 'copied' | 'failed';
+
+function subscribeToShareSupport() {
+  return () => {};
+}
+
+function readShareSupport() {
+  return typeof navigator.share === 'function';
+}
+
+function readServerShareSupport() {
+  return false;
+}
+
+function boardStatus(
+  status: MatchStatus,
+  gameState: { isCheckmate: boolean; isStalemate: boolean; turn: 'w' | 'b' },
+  isMyTurn: boolean,
+): { badge: string; detail: string; variant: 'default' | 'secondary' } {
+  if (gameState.isCheckmate) {
+    return {
+      badge: 'Checkmate',
+      detail: `${gameState.turn === 'w' ? 'Black' : 'White'} wins!`,
+      variant: 'default',
+    };
+  }
+  if (gameState.isStalemate) {
+    return {
+      badge: 'Stalemate',
+      detail: 'The game is a draw.',
+      variant: 'secondary',
+    };
+  }
+
+  switch (status) {
+    case 'waiting':
+      return {
+        badge: 'Waiting',
+        detail: 'Waiting for opponent to join...',
+        variant: 'secondary',
+      };
+    case 'active':
+      return {
+        badge: isMyTurn ? 'Your turn' : "Opponent's turn",
+        detail: `${gameState.turn === 'w' ? 'White' : 'Black'} to move`,
+        variant: isMyTurn ? 'default' : 'secondary',
+      };
+    case 'finished':
+      return {
+        badge: 'Game over',
+        detail: 'This game has ended.',
+        variant: 'secondary',
+      };
+    default: {
+      const exhaustive: never = status;
+      return { badge: 'Game over', detail: exhaustive, variant: 'secondary' };
+    }
+  }
+}
 
 export default function MatchPage() {
   const params = useParams();
@@ -45,8 +106,15 @@ export default function MatchPage() {
   const [blackPlayerName, setBlackPlayerName] = useState<string | null>(null);
   const [roomEndedMessage, setRoomEndedMessage] = useState<string | null>(null);
   const [opponentJoinedMessage, setOpponentJoinedMessage] = useState<string | null>(null);
-  const [roomCodeCopied, setRoomCodeCopied] = useState(false);
+  const [inviteCopyState, setInviteCopyState] = useState<InviteCopyState>('idle');
+  const canShareInvite = useSyncExternalStore(
+    subscribeToShareSupport,
+    readShareSupport,
+    readServerShareSupport,
+  );
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const audioPromptDismissedRef = useRef(false);
   const previousMatchStatusRef = useRef<string | null>(null);
   const previousWhitePlayerNameRef = useRef<string | null>(null);
   const previousBlackPlayerNameRef = useRef<string | null>(null);
@@ -76,11 +144,15 @@ export default function MatchPage() {
     }
     setGameStateKey(prev => prev + 1);
 
-    if (!playedMove) return;
+    if (!playedMove) {
+      setLastMove(null);
+      return;
+    }
 
     const audioEngine = audioEngineRef.current;
     if (!audioEngine?.isReady) {
       console.log('Audio not ready, skipping note for opponent move to', playedMove.to);
+      setLastMove({ from: playedMove.from, to: playedMove.to });
       return;
     }
 
@@ -88,6 +160,7 @@ export default function MatchPage() {
     if (playedMove.captured) {
       audioEngine.triggerOpponentRowCapture(parseInt(playedMove.to[1], 10));
     }
+    setLastMove({ from: playedMove.from, to: playedMove.to });
   }, []);
 
   // Create stable callback refs
@@ -380,16 +453,24 @@ export default function MatchPage() {
     matchRef.current = match;
   }, [audioEngine, game, match]);
 
-  // Show audio prompt dialog when match is ready and audio is not initialized
+  // Offer the dialog once. Dismissing it (including Escape) must not start
+  // audio; the header button stays available until the context is running.
   useEffect(() => {
-    if (match && game && playerColor && !audioEngine.isInitialized && !showAudioPrompt) {
-      // Small delay to ensure the page is fully rendered
-      const timer = setTimeout(() => {
-        setShowAudioPrompt(true);
-      }, 500);
-      return () => clearTimeout(timer);
+    if (!match || !game || !playerColor || audioEngine.isInitialized || audioPromptDismissedRef.current) {
+      return;
     }
-  }, [match, game, playerColor, audioEngine.isInitialized, showAudioPrompt]);
+    const timer = setTimeout(() => {
+      setShowAudioPrompt(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [match, game, playerColor, audioEngine.isInitialized]);
+
+  const handleAudioPromptOpenChange = (open: boolean) => {
+    if (!open) {
+      audioPromptDismissedRef.current = true;
+    }
+    setShowAudioPrompt(open);
+  };
 
   // Set up audio triggers when game and audio engine are ready
   // This handles audio for local moves (own synth) only
@@ -452,11 +533,14 @@ export default function MatchPage() {
       return;
     }
 
+    setLastMove({ from, to });
+
     // Get updated game state after the move
     const updatedGameState = game.getGameState();
-    // Calculate move number from game state (history length), not from moves array
-    // This ensures correct numbering even if moves array is out of sync
-    const moveNumber = game.getMoveNumber();
+    // Numbered from the position rather than the moves array, so the number stays
+    // correct even when the array is out of sync. The move we just played is the
+    // most recent half-move.
+    const moveNumber = game.getHalfMoveCount();
 
     // Force re-render
     setGameStateKey(prev => prev + 1);
@@ -481,6 +565,7 @@ export default function MatchPage() {
       if (match?.current_fen) {
         game.loadFen(match.current_fen);
         setGameStateKey(prev => prev + 1);
+        setLastMove(null);
       }
       return;
     }
@@ -515,6 +600,7 @@ export default function MatchPage() {
     if (game) {
       game.loadFen(INITIAL_FEN);
       setGameStateKey(prev => prev + 1);
+      setLastMove(null);
     }
 
     // Delete all old moves from the database to ensure clean restart
@@ -561,10 +647,30 @@ export default function MatchPage() {
   };
 
 
+  if (realtimeError && !match) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 space-y-4">
+            <Alert variant="destructive">
+              <AlertTitle>Could not load room</AlertTitle>
+              <AlertDescription>
+                The room could not be loaded. {realtimeError}
+              </AlertDescription>
+            </Alert>
+            <Button asChild>
+              <Link href="/">Back to Home</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (loading || !match || !game || !playerColor) {
     return (
-      <div className="min-h-screen bg-[#212529] text-white flex items-center justify-center">
-        <div>Loading match...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Skeleton className="w-full max-w-2xl aspect-square rounded-lg" />
       </div>
     );
   }
@@ -601,43 +707,93 @@ export default function MatchPage() {
   };
 
   const roomCode = generateRoomCode(matchId);
+  const statusLine = boardStatus(match.status, gameState, isMyTurn);
 
-  const handleCopyRoomCode = () => {
-    navigator.clipboard.writeText(roomCode);
-    setRoomCodeCopied(true);
-    setTimeout(() => setRoomCodeCopied(false), 2000);
+  const markInviteCopy = (next: InviteCopyState) => {
+    setInviteCopyState(next);
+    window.setTimeout(() => setInviteCopyState('idle'), 2000);
   };
 
+  const handleCopyInvite = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/?join=${roomCode}`);
+      markInviteCopy('copied');
+    } catch {
+      markInviteCopy('failed');
+    }
+  };
+
+  const handleShareInvite = async () => {
+    if (typeof navigator.share !== 'function') return;
+    try {
+      await navigator.share({
+        title: '64 Squares',
+        url: `${window.location.origin}/?join=${roomCode}`,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      markInviteCopy('failed');
+    }
+  };
+
+  const inviteCopyLabel = inviteCopyState === 'copied'
+    ? 'Copied'
+    : inviteCopyState === 'failed'
+      ? 'Copy failed'
+      : 'Copy';
+
   return (
-    <div className="min-h-screen bg-background p-4 overflow-x-hidden">
+    <div className="min-h-screen bg-background p-2 sm:p-4 overflow-x-hidden">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {!audioEngine.isInitialized && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleEnableAudio}
+                aria-label="Enable audio"
+              >
+                <Volume2 />
+                Enable audio
+              </Button>
+            )}
+            <AudioTransport onStop={audioEngine.stopAll} />
           </div>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center w-full sm:w-auto">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm sm:text-base text-muted-foreground">Room Code:</span>
               <Badge variant="outline" className="font-mono text-sm sm:text-base px-3 py-1.5">{roomCode}</Badge>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    onClick={handleCopyRoomCode}
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                  >
-                    {roomCodeCopied ? (
-                      <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{roomCodeCopied ? 'Copied!' : 'Copy room code'}</p>
-                </TooltipContent>
-              </Tooltip>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleCopyInvite}
+                size="sm"
+                className="h-8 px-2"
+                aria-label="Copy invite link"
+              >
+                {inviteCopyState === 'copied' ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+                <span className="text-xs">{inviteCopyLabel}</span>
+              </Button>
+              {canShareInvite && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleShareInvite}
+                  size="sm"
+                  className="h-8 px-2"
+                  aria-label="Share invite link"
+                >
+                  <Share2 className="h-4 w-4" />
+                  <span className="text-xs">Share</span>
+                </Button>
+              )}
             </div>
             <Button variant="ghost" asChild className="text-sm sm:text-base">
               <Link href="/">Back to Home</Link>
@@ -659,41 +815,13 @@ export default function MatchPage() {
           {/* Main board area - 70% width on desktop */}
           <div className="lg:col-span-7 space-y-4">
             <Card>
-              <CardContent className="pt-4 sm:pt-6 space-y-4">
-            {gameState.isCheckmate && (
-              <Alert>
-                <AlertTitle>Checkmate!</AlertTitle>
-                <AlertDescription>
-                  {gameState.turn === 'w' ? 'Black' : 'White'} wins!
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {gameState.isStalemate && (
-              <Alert>
-                <AlertTitle>Stalemate!</AlertTitle>
-                <AlertDescription>The game is a draw.</AlertDescription>
-              </Alert>
-            )}
-
-            {match.status === 'waiting' && (
-              <Alert>
-                <AlertDescription>Waiting for opponent to join...</AlertDescription>
-              </Alert>
-            )}
-
+              <CardContent className="px-0 sm:px-6 pt-4 sm:pt-6 space-y-4">
+            {(opponentJoinedMessage || roomEndedMessage || realtimeError) && (
+            <div className="px-2 sm:px-0 space-y-4">
             {opponentJoinedMessage && (
               <Alert>
                 <AlertTitle>👋 Player Joined</AlertTitle>
                 <AlertDescription>{opponentJoinedMessage}</AlertDescription>
-              </Alert>
-            )}
-
-            {match.status === 'active' && !gameState.isCheckmate && !gameState.isStalemate && (
-              <Alert>
-                <AlertDescription>
-                  {isMyTurn ? 'Your turn' : "Opponent's turn"} - {gameState.turn === 'w' ? 'White' : 'Black'} to move
-                </AlertDescription>
               </Alert>
             )}
 
@@ -723,15 +851,16 @@ export default function MatchPage() {
                 </details>
               </Alert>
             )}
-
+            </div>
+            )}
 
             {/* Audio prompt dialog - shows when player joins */}
-            <AlertDialog open={showAudioPrompt} onOpenChange={setShowAudioPrompt}>
+            <AlertDialog open={showAudioPrompt} onOpenChange={handleAudioPromptOpenChange}>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Enable Audio</AlertDialogTitle>
                   <AlertDialogDescription>
-                  Please enable audio.
+                    Your browser only plays sound after a tap. Each move plays a note that rings for about 20 seconds.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -742,7 +871,15 @@ export default function MatchPage() {
               </AlertDialogContent>
             </AlertDialog>
 
-
+            <div className="sticky top-0 z-10 sm:static flex flex-wrap items-center gap-2 bg-card px-2 sm:px-0 py-2">
+              <Badge variant={statusLine.variant}>{statusLine.badge}</Badge>
+              <span className="text-sm text-muted-foreground">{statusLine.detail}</span>
+              {match.status === 'finished' && (
+                <Button variant="outline" size="sm" asChild className="sm:ml-auto">
+                  <Link href="/">Back to Home</Link>
+                </Button>
+              )}
+            </div>
 
             <div key={gameStateKey}>
               <Board
@@ -750,12 +887,14 @@ export default function MatchPage() {
                 playerColor={playerColor}
                 onMove={handleMove}
                 orientation={playerColor}
+                lastMove={lastMove}
+                interactive={isMyTurn && match.status === 'active'}
               />
             </div>
 
             {/* Creator Controls */}
             {isCreator && (
-              <div className="flex gap-4 mt-4">
+              <div className="flex gap-4 mt-4 px-2 sm:px-0">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="outline" className="border-[0.5px] w-full">

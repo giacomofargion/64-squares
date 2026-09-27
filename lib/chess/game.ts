@@ -180,28 +180,25 @@ export class ChessGame {
   }
 
   /**
-   * Get the current move number (1-indexed)
-   * This is calculated from the game history, not from external move records
+   * How many half-moves have been played to reach the current position, so the
+   * move just played is number `getHalfMoveCount()`.
+   *
+   * Read from the FEN rather than chess.js `history()`, which is empty for a game
+   * loaded from a FEN partway through.
    */
-  getMoveNumber(): number {
-    // chess.js history() returns all moves made so far
-    // However, if the game was loaded from FEN, history() might be empty
-    // So we parse the FEN to get the fullmove number and calculate from that
-    const fen = this.chess.fen();
-    const fenParts = fen.split(' ');
-    if (fenParts.length >= 5) {
-      const fullmoveNumber = parseInt(fenParts[5], 10) || 1;
-      const turn = fenParts[1]; // 'w' or 'b'
-      // If it's white's turn, we're about to make move (fullmove-1)*2 + 1
-      // If it's black's turn, we're about to make move (fullmove-1)*2 + 2
-      if (turn === 'w') {
-        return (fullmoveNumber - 1) * 2 + 1;
-      } else {
-        return (fullmoveNumber - 1) * 2 + 2;
-      }
+  getHalfMoveCount(): number {
+    const fenParts = this.chess.fen().split(' ');
+    const fullMoveNumber = Number(fenParts[5]);
+
+    if (!Number.isInteger(fullMoveNumber) || fullMoveNumber < 1) {
+      return this.chess.history().length;
     }
-    // Fallback: use history length + 1
-    return this.chess.history().length + 1;
+
+    // The full-move number counts white/black pairs and only advances once black
+    // has replied, so each completed pair is two half-moves. Black being to move
+    // means white has already played the odd half-move of the current pair.
+    const whiteHasPlayedCurrentPair = fenParts[1] === 'b';
+    return (fullMoveNumber - 1) * 2 + (whiteHasPlayedCurrentPair ? 1 : 0);
   }
 
   /**

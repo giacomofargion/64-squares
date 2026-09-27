@@ -3,6 +3,40 @@
 import { Piece } from './Piece';
 import type { Square as SquareType, Color, PieceType } from '@/types/chess';
 
+function pieceNoun(type: PieceType): string {
+  switch (type) {
+    case 'p':
+      return 'pawn';
+    case 'r':
+      return 'rook';
+    case 'n':
+      return 'knight';
+    case 'b':
+      return 'bishop';
+    case 'q':
+      return 'queen';
+    case 'k':
+      return 'king';
+    default: {
+      const exhaustive: never = type;
+      return exhaustive;
+    }
+  }
+}
+
+function colorNoun(color: Color): string {
+  switch (color) {
+    case 'w':
+      return 'white';
+    case 'b':
+      return 'black';
+    default: {
+      const exhaustive: never = color;
+      return exhaustive;
+    }
+  }
+}
+
 interface SquareProps {
   square: SquareType;
   isLight: boolean;
@@ -46,6 +80,16 @@ export function Square({
     onPieceDragEnd?.();
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    onSquareClick?.(square);
+  };
+
+  const ariaLabel = piece
+    ? `${square}, ${colorNoun(piece.color)} ${pieceNoun(piece.type)}`
+    : `${square}, empty`;
+
   // Wooden chess board colors
   const bgColor = isLight
     ? isSelected
@@ -73,6 +117,7 @@ export function Square({
         transition-colors duration-150
         border border-amber-800/20
         shadow-sm
+        focus-visible:outline focus-visible:outline-2 focus-visible:outline-white focus-visible:z-10
       `}
       style={{
         aspectRatio: '1 / 1',
@@ -82,7 +127,11 @@ export function Square({
           ? 'linear-gradient(135deg, rgba(251, 243, 219, 0.3) 0%, rgba(245, 230, 200, 0.5) 100%)'
           : 'linear-gradient(135deg, rgba(120, 53, 15, 0.8) 0%, rgba(92, 40, 12, 0.9) 100%)',
       }}
+      role="gridcell"
+      aria-label={ariaLabel}
+      tabIndex={0}
       onClick={() => onSquareClick?.(square)}
+      onKeyDown={handleKeyDown}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >

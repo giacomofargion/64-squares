@@ -10,12 +10,22 @@ interface BoardProps {
   playerColor: Color | null;
   onMove?: (from: SquareType, to: SquareType) => void;
   orientation?: Color; // 'w' or 'b' - which side is at the bottom
+  lastMove?: { from: SquareType; to: SquareType } | null;
+  interactive?: boolean;
 }
 
-export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardProps) {
+export function Board({
+  game,
+  playerColor,
+  onMove,
+  orientation = 'w',
+  lastMove: lastMoveProp,
+  interactive = true,
+}: BoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<SquareType | null>(null);
   const [legalMoves, setLegalMoves] = useState<SquareType[]>([]);
-  const [lastMove, setLastMove] = useState<{ from: SquareType; to: SquareType } | null>(null);
+  const [internalLastMove, setInternalLastMove] = useState<{ from: SquareType; to: SquareType } | null>(null);
+  const lastMove = lastMoveProp !== undefined ? lastMoveProp : internalLastMove;
   const [draggedSquare, setDraggedSquare] = useState<SquareType | null>(null);
   const [gameFen, setGameFen] = useState(() => game.getFen());
   const [forceUpdate, setForceUpdate] = useState(0);
@@ -67,6 +77,7 @@ export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardPro
   }, [selectedSquare, game]);
 
   const handleSquareClick = useCallback((square: SquareType) => {
+    if (!interactive) return;
     const gameState = game.getGameState();
 
     // For solo play (playerColor is null or matches turn), allow moves for current turn
@@ -88,7 +99,7 @@ export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardPro
         // Solo play - make the move locally
         const success = game.makeMove(selectedSquare, square);
         if (success) {
-          setLastMove({ from: selectedSquare, to: square });
+          setInternalLastMove({ from: selectedSquare, to: square });
           setSelectedSquare(null);
           setLegalMoves([]);
           onMove?.(selectedSquare, square);
@@ -112,9 +123,10 @@ export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardPro
         setSelectedSquare(square);
       }
     }
-  }, [selectedSquare, game, playerColor, onMove]);
+  }, [selectedSquare, game, playerColor, onMove, interactive]);
 
   const handleDragStart = useCallback((square: SquareType) => {
+    if (!interactive) return;
     const piece = game.getPiece(square);
     const gameState = game.getGameState();
     // Allow dragging if it's the current turn's piece
@@ -122,13 +134,14 @@ export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardPro
       setSelectedSquare(square);
       setDraggedSquare(square);
     }
-  }, [game]);
+  }, [game, interactive]);
 
   const handleDragEnd = useCallback(() => {
     setDraggedSquare(null);
   }, []);
 
   const handleDrop = useCallback((square: SquareType) => {
+    if (!interactive) return;
     if (selectedSquare && draggedSquare === selectedSquare) {
       const gameState = game.getGameState();
       const canMove = playerColor === null || gameState.turn === playerColor;
@@ -143,7 +156,7 @@ export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardPro
           // Solo play - make the move locally
           const success = game.makeMove(selectedSquare, square);
           if (success) {
-            setLastMove({ from: selectedSquare, to: square });
+            setInternalLastMove({ from: selectedSquare, to: square });
             setSelectedSquare(null);
             setLegalMoves([]);
             onMove?.(selectedSquare, square);
@@ -151,7 +164,7 @@ export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardPro
         }
       }
     }
-  }, [selectedSquare, draggedSquare, game, playerColor, onMove]);
+  }, [selectedSquare, draggedSquare, game, playerColor, onMove, interactive]);
 
   // Generate board squares
   const squares: SquareType[] = [];
@@ -165,8 +178,13 @@ export function Board({ game, playerColor, onMove, orientation = 'w' }: BoardPro
   });
 
   return (
-    <div className="w-full max-w-2xl mx-auto border-4 border-amber-900 rounded-lg shadow-2xl overflow-hidden" style={{ aspectRatio: '1 / 1' }}>
-      <div className="grid grid-cols-8 h-full w-full">
+    <div className="w-full max-w-2xl mx-auto border-2 sm:border-4 border-amber-900 rounded-lg shadow-2xl overflow-hidden" style={{ aspectRatio: '1 / 1' }}>
+      <div
+        role="grid"
+        aria-label="Chess board"
+        aria-disabled={!interactive}
+        className={`grid grid-cols-8 h-full w-full ${interactive ? '' : 'opacity-60 cursor-not-allowed pointer-events-none'}`}
+      >
         {squares.map((square) => {
           const row = parseInt(square[1]);
           const col = square.charCodeAt(0) - 96; // a=1, b=2, etc.

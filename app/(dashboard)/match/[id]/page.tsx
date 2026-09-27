@@ -454,9 +454,10 @@ export default function MatchPage() {
 
     // Get updated game state after the move
     const updatedGameState = game.getGameState();
-    // Calculate move number from game state (history length), not from moves array
-    // This ensures correct numbering even if moves array is out of sync
-    const moveNumber = game.getMoveNumber();
+    // Numbered from the position rather than the moves array, so the number stays
+    // correct even when the array is out of sync. The move we just played is the
+    // most recent half-move.
+    const moveNumber = game.getHalfMoveCount();
 
     // Force re-render
     setGameStateKey(prev => prev + 1);

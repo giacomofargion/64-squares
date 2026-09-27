@@ -28,38 +28,48 @@ export function useDualAudioEngine(
     }
   }, [isInitialized, ownSynthType]);
 
-  // Create dual synth generator when initialized
+  // Latest requested synth types, so the generator can be seeded with them without
+  // making its creation depend on them. Declared before the creation effect so this
+  // effect runs first and the refs are current when the generator is built.
+  const ownSynthTypeRef = useRef(ownSynthType);
+  const opponentSynthTypeRef = useRef(opponentSynthType);
+
+  // Apply synth type changes in place. Each side is swapped independently, so
+  // changing one instrument leaves the other side's ringing notes alone.
   useEffect(() => {
-    // Initialize with both synth types (use 'Synth' as default if opponent type not available yet)
-    const effectiveOwnSynth = ownSynthType || 'Synth';
-    const effectiveOpponentSynth = opponentSynthType || 'Synth';
+    ownSynthTypeRef.current = ownSynthType;
+    opponentSynthTypeRef.current = opponentSynthType;
 
-    if (isInitialized && !dualSynthGeneratorRef.current) {
-      dualSynthGeneratorRef.current = new DualSynthGenerator(effectiveOwnSynth, effectiveOpponentSynth);
-      setIsReady(true);
-    }
+    const generator = dualSynthGeneratorRef.current;
+    if (!generator) return;
 
-    // Update synth types if they change (async)
-    if (dualSynthGeneratorRef.current) {
-      if (ownSynthType) {
-        dualSynthGeneratorRef.current.setOwnSynthType(ownSynthType).catch(console.error);
-      }
-      // Always update opponent synth type when it changes (even if it's the same initially)
-      // This ensures it updates when opponent joins
-      if (opponentSynthType) {
-        dualSynthGeneratorRef.current.setOpponentSynthType(opponentSynthType).catch(console.error);
-        console.log('Updated opponent synth in dual generator:', opponentSynthType);
-      }
+    if (ownSynthType) {
+      generator.setOwnSynthType(ownSynthType).catch(console.error);
     }
+    if (opponentSynthType) {
+      generator.setOpponentSynthType(opponentSynthType).catch(console.error);
+    }
+  }, [ownSynthType, opponentSynthType]);
+
+  // The generator owns the Tone.js nodes for both players, so it is built once when
+  // audio starts and only disposed when audio is torn down. Rebuilding it on every
+  // synth type change used to cut off every note still ringing, including the
+  // opponent's, and the opponent's type changes as soon as they join a match.
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    dualSynthGeneratorRef.current = new DualSynthGenerator(
+      ownSynthTypeRef.current || 'Synth',
+      opponentSynthTypeRef.current || 'Synth'
+    );
+    setIsReady(true);
 
     return () => {
-      if (dualSynthGeneratorRef.current) {
-        dualSynthGeneratorRef.current.dispose();
-        dualSynthGeneratorRef.current = null;
-        setIsReady(false);
-      }
+      dualSynthGeneratorRef.current?.dispose();
+      dualSynthGeneratorRef.current = null;
+      setIsReady(false);
     };
-  }, [isInitialized, ownSynthType, opponentSynthType]);
+  }, [isInitialized]);
 
   const triggerOwnSquareNote = useCallback((square: string) => {
     if (dualSynthGeneratorRef.current && isReady) {

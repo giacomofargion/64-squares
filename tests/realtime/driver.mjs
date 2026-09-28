@@ -33,7 +33,18 @@ const MOVES = [
   ['e7', 'e5'],
   ['g1', 'f3'],
   ['b8', 'c6'],
+  ['f1', 'c4'],
+  ['g8', 'f6'],
+  ['d2', 'd3'],
+  ['f8', 'c5'],
 ];
+
+// Headless Chrome hands the analyser silence, so listening to the actual
+// output needs a visible window (DISPLAY must point at an X server).
+const measureOutput = process.env.MEASURE_OUTPUT === '1';
+const AUDIBLE_RMS = 0.01;
+const STILL_RINGING_RMS = 0.004;
+const RING_CHECK_MS = 3_000;
 
 function envNumber(name, fallback) {
   const raw = process.env[name];
@@ -143,7 +154,7 @@ try {
 
   browser = await puppeteer.launch({
     executablePath: chromePath,
-    headless: true,
+    headless: !measureOutput,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -283,6 +294,36 @@ try {
     return clickSquare(device, to);
   }
 
+  async function peakRmsSince(device, sinceTs) {
+    return device.page.evaluate((ts) => {
+      const probe = window.__output;
+      if (!probe) return 0;
+      return probe.samples.filter((sample) => sample.t >= ts).reduce((max, sample) => Math.max(max, sample.rms), 0);
+    }, sinceTs);
+  }
+
+  async function waitForAudibleOutput(device, sinceTs) {
+    const started = Date.now();
+    while (Date.now() - started < maxIntervalMs) {
+      if ((await peakRmsSince(device, sinceTs)) > AUDIBLE_RMS) return true;
+      await sleep(50);
+    }
+    return false;
+  }
+
+  // Every note rings for 20s, so a level that has collapsed a few seconds
+  // after the move means something released or disposed the graph.
+  async function checkStillRinging(device, moveStartedAt, description) {
+    const remaining = moveStartedAt + RING_CHECK_MS - Date.now();
+    if (remaining > 0) await sleep(remaining);
+    const level = await peakRmsSince(device, Date.now() - 400);
+    if (level < STILL_RINGING_RMS) {
+      fail(`${device.name} went silent ${RING_CHECK_MS}ms after ${description} (rms=${level.toFixed(4)})`);
+    } else {
+      log('server', `PASS ${device.name} still ringing after ${description} (rms=${level.toFixed(3)})`);
+    }
+  }
+
   async function waitForOpponentNote(listener, square) {
     const before = opponentNoteCount(listener.name, square);
     const started = Date.now();
@@ -341,6 +382,7 @@ try {
       droppedListener = listener;
       log('server', `dropping moves INSERT for ${listener.name}`);
     }
+    const moveStartedAt = Date.now();
     const played = await playMove(device, from, to);
     if (!played) {
       fail(`${device.name} could not play ${from}-${to}`);
@@ -353,6 +395,18 @@ try {
     } else if (halfMove === dropOnHalfMove) {
       log('server', `PASS ${listener.name} heard ${to} after the moves INSERT was dropped`);
     }
+
+    if (!measureOutput) continue;
+    const description = `${device.name} played ${from}-${to}`;
+    for (const [who, role] of [[device, 'own'], [listener, 'opponent']]) {
+      if (await waitForAudibleOutput(who, moveStartedAt)) {
+        log('server', `PASS ${who.name} output audible for ${role} note ${to}`);
+      } else {
+        fail(`${who.name} produced no output for ${role} note ${to}`);
+      }
+    }
+    await checkStillRinging(device, moveStartedAt, description);
+    await checkStillRinging(listener, moveStartedAt, description);
   }
 
   log('server', '--- Bob returns home ---');

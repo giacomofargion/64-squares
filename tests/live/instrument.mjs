@@ -2,7 +2,7 @@
 // output and realtime channel churn without changing app behaviour.
 export function instrument(cfg) {
   const { label, sublabel, accent } = cfg;
-  const state = { samples: [], oscStarts: [], resubscribes: 0, subscribed: 0, audioStartedAt: null };
+  const state = { samples: [], oscStarts: [], contexts: [], resubscribes: 0, subscribed: 0, audioStartedAt: null };
   window.__probe = state;
 
   const origLog = console.log;
@@ -18,6 +18,7 @@ export function instrument(cfg) {
     const result = origConnect.call(this, dest, ...rest);
     try {
       const ctx = this.context;
+      if (ctx && !state.contexts.includes(ctx)) state.contexts.push(ctx);
       if (ctx && dest === ctx.destination) {
         if (!ctx.__tapAnalyser) {
           const analyser = ctx.createAnalyser();

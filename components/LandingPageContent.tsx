@@ -374,7 +374,7 @@ export function LandingPageContent() {
                   <div className="h-0.5 w-full bg-white rounded-full" />
                 </div>
 
-                <div className="space-y-2.5 lg:space-y-3 text-white/70 leading-relaxed text-sm lg:text-base">
+                <div className="space-y-3 lg:space-y-4 text-zinc-50 leading-relaxed text-lg lg:text-xl">
                   <p>
                     64 Squares is a virtual chess board which utilises an 8 note scale to represent the columns on a
                     chess board: A, B (bflat in German), C, D, E, F G, H (b in German).

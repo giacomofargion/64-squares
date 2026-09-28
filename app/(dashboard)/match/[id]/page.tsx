@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState, useRef, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { departureMessage, departurePlayerName } from '@/lib/match/departure';
+import { resumeAudioContext } from '@/lib/audio/resumeAudioContext';
 import { Board } from '@/components/chess/Board';
 import { ChatRoom } from '@/components/chat/ChatRoom';
 import { ChessGame, INITIAL_FEN, findConnectingMove } from '@/lib/chess/game';
@@ -106,6 +107,7 @@ export default function MatchPage() {
   const [blackPlayerName, setBlackPlayerName] = useState<string | null>(null);
   const [roomEndedMessage, setRoomEndedMessage] = useState<string | null>(null);
   const [opponentJoinedMessage, setOpponentJoinedMessage] = useState<string | null>(null);
+  const announcedDepartureRef = useRef(false);
   const [inviteCopyState, setInviteCopyState] = useState<InviteCopyState>('idle');
   const canShareInvite = useSyncExternalStore(
     subscribeToShareSupport,
@@ -227,14 +229,18 @@ export default function MatchPage() {
       if (currentPlayerColor === 'w') {
         // We're white, opponent is black
         if (updatedMatch.black_player_synth_type) {
-          console.log('Updating opponent synth type (black):', updatedMatch.black_player_synth_type);
-          setOpponentSynthType(updatedMatch.black_player_synth_type);
+          // Every move rewrites the match row. Setting the same synth type again
+          // would rebuild that instrument and release the notes still ringing.
+          setOpponentSynthType((current) =>
+            current === updatedMatch.black_player_synth_type ? current : updatedMatch.black_player_synth_type
+          );
         }
       } else if (currentPlayerColor === 'b') {
         // We're black, opponent is white
         if (updatedMatch.white_player_synth_type) {
-          console.log('Updating opponent synth type (white):', updatedMatch.white_player_synth_type);
-          setOpponentSynthType(updatedMatch.white_player_synth_type);
+          setOpponentSynthType((current) =>
+            current === updatedMatch.white_player_synth_type ? current : updatedMatch.white_player_synth_type
+          );
         }
       }
 
@@ -337,6 +343,16 @@ export default function MatchPage() {
       onMatchUpdateRef.current?.(updatedMatch);
     },
   });
+
+  let opponentLeftMessage: string | null = null;
+  for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
+    const message = chatMessages[index];
+    const name = departurePlayerName(message.message);
+    if (name && name !== userName) {
+      opponentLeftMessage = message.message;
+      break;
+    }
+  }
 
   // Initialize user and game
   useEffect(() => {
@@ -496,7 +512,50 @@ export default function MatchPage() {
     setShowAudioPrompt(false); // Close the dialog when audio is enabled
   };
 
+  // The match channel already delivers chat inserts, so a departure is a chat
+  // row rather than a new column. The other player renders it as a banner.
+  const announceDeparture = useCallback(() => {
+    const name = userNameRef.current;
+    if (announcedDepartureRef.current || !name) return Promise.resolve();
+    announcedDepartureRef.current = true;
+    return supabase
+      .from('chat_messages')
+      .insert({
+        match_id: matchId,
+        message: departureMessage(name),
+        user_name: name,
+      })
+      .then(({ error }) => {
+        if (error) console.error('Failed to announce departure:', error);
+      });
+  }, [matchId]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      void announceDeparture();
+    };
+    const onPopState = () => {
+      void announceDeparture();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [announceDeparture]);
+
+  const handleLeaveHome = async () => {
+    const pending = announceDeparture();
+    await Promise.race([
+      pending,
+      new Promise((resolve) => setTimeout(resolve, 1200)),
+    ]);
+    router.push('/');
+  };
+
   const handleMove = async (from: Square, to: Square) => {
+    resumeAudioContext();
     if (!game || !match || !userName) return; // Must have userName
 
     // Don't allow moves if match is not active
@@ -658,8 +717,8 @@ export default function MatchPage() {
                 The room could not be loaded. {realtimeError}
               </AlertDescription>
             </Alert>
-            <Button asChild>
-              <Link href="/">Back to Home</Link>
+            <Button type="button" onClick={handleLeaveHome}>
+              Back to Home
             </Button>
           </CardContent>
         </Card>
@@ -748,16 +807,16 @@ export default function MatchPage() {
         {/* Header */}
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div className="flex flex-wrap items-center gap-2">
-            {!audioEngine.isInitialized && (
+            {(!audioEngine.isInitialized || !audioEngine.isRunning) && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleEnableAudio}
-                aria-label="Enable audio"
+                aria-label={audioEngine.isInitialized ? 'Resume audio' : 'Enable audio'}
               >
                 <Volume2 />
-                Enable audio
+                {audioEngine.isInitialized ? 'Resume audio' : 'Enable audio'}
               </Button>
             )}
             <AudioTransport onStop={audioEngine.stopAll} />
@@ -795,8 +854,8 @@ export default function MatchPage() {
                 </Button>
               )}
             </div>
-            <Button variant="ghost" asChild className="text-sm sm:text-base">
-              <Link href="/">Back to Home</Link>
+            <Button type="button" variant="ghost" className="text-sm sm:text-base" onClick={handleLeaveHome}>
+              Back to Home
             </Button>
           </div>
         </header>
@@ -816,7 +875,7 @@ export default function MatchPage() {
           <div className="lg:col-span-7 space-y-4">
             <Card>
               <CardContent className="px-0 sm:px-6 pt-4 sm:pt-6 space-y-4">
-            {(opponentJoinedMessage || roomEndedMessage || realtimeError) && (
+            {(opponentJoinedMessage || opponentLeftMessage || roomEndedMessage || realtimeError) && (
             <div className="px-2 sm:px-0 space-y-4">
             {opponentJoinedMessage && (
               <Alert>
@@ -825,11 +884,18 @@ export default function MatchPage() {
               </Alert>
             )}
 
+            {opponentLeftMessage && (
+              <Alert>
+                <AlertTitle>Player left</AlertTitle>
+                <AlertDescription>{opponentLeftMessage}</AlertDescription>
+              </Alert>
+            )}
+
             {roomEndedMessage && (
               <Alert variant="destructive">
                 <AlertTitle>⚠️ Room Ended</AlertTitle>
                 <AlertDescription className="mb-4">{roomEndedMessage}</AlertDescription>
-                <Button onClick={() => router.push('/')} variant="outline" size="sm">
+                <Button type="button" onClick={handleLeaveHome} variant="outline" size="sm">
                   Return to Home
                 </Button>
               </Alert>
@@ -875,8 +941,8 @@ export default function MatchPage() {
               <Badge variant={statusLine.variant}>{statusLine.badge}</Badge>
               <span className="text-sm text-muted-foreground">{statusLine.detail}</span>
               {match.status === 'finished' && (
-                <Button variant="outline" size="sm" asChild className="sm:ml-auto">
-                  <Link href="/">Back to Home</Link>
+                <Button type="button" variant="outline" size="sm" className="sm:ml-auto" onClick={handleLeaveHome}>
+                  Back to Home
                 </Button>
               )}
             </div>
@@ -949,7 +1015,10 @@ export default function MatchPage() {
             <div className="lg:h-[600px]">
               <ChatRoom
                 messages={chatMessages}
-                onSendMessage={(msg) => sendMessage(msg, userName)}
+                onSendMessage={async (msg) => {
+                  resumeAudioContext();
+                  await sendMessage(msg, userName);
+                }}
                 currentUserName={userName || undefined}
               />
             </div>

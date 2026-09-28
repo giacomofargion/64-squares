@@ -93,16 +93,16 @@ function PlayPageContent() {
         {/* Header */}
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
           <div className="flex flex-wrap items-center gap-2">
-            {!audioEngine.isInitialized && (
+            {(!audioEngine.isInitialized || !audioEngine.isRunning) && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleEnableAudio}
-                aria-label="Enable audio"
+                aria-label={audioEngine.isInitialized ? 'Resume audio' : 'Enable audio'}
               >
                 <Volume2 />
-                Enable audio
+                {audioEngine.isInitialized ? 'Resume audio' : 'Enable audio'}
               </Button>
             )}
             <AudioTransport onStop={audioEngine.stopAll} />

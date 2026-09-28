@@ -11,6 +11,8 @@ import { ChessGame, INITIAL_FEN, findConnectingMove } from '@/lib/chess/game';
 import { useRealtimeMatch } from '@/hooks/useRealtimeMatch';
 import { useDualAudioEngine } from '@/hooks/useDualAudioEngine';
 import { AudioTransport } from '@/components/audio/AudioTransport';
+import { AudioDebugPanel } from '@/components/audio/AudioDebugPanel';
+import { useAudioDebugEnabled } from '@/hooks/useAudioDebugEnabled';
 import { getGuestName } from '@/lib/guestSession';
 import { generateRoomCode } from '@/lib/roomCode';
 import type { Match, MatchStatus, MoveRecord } from '@/types/match';
@@ -115,6 +117,7 @@ export default function MatchPage() {
     readServerShareSupport,
   );
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+  const audioDebugEnabled = useAudioDebugEnabled();
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const audioPromptDismissedRef = useRef(false);
   const previousMatchStatusRef = useRef<string | null>(null);
@@ -1025,6 +1028,9 @@ export default function MatchPage() {
           </div>
         </div>
       </div>
+      {audioDebugEnabled && (
+        <AudioDebugPanel ownSynthType={ownSynthType} opponentSynthType={opponentSynthType} />
+      )}
     </div>
   );
 }

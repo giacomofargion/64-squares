@@ -1,8 +1,5 @@
-import * as Tone from 'tone';
 import type { SynthType } from '@/types/audio';
 import { SoundGenerator } from './SoundGenerator';
-import { squareToNote } from '@/lib/audio/noteMapping';
-import { getRowNotes } from '@/lib/audio/noteMapping';
 
 /**
  * Manages two SoundGenerator instances for dual-synth support

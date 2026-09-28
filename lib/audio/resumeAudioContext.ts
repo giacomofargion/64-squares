@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { recordAudioEvent } from '@/lib/audio/audioDiagnostics';
 
 /**
  * Browsers suspend the audio context when a text field is focused (the match
@@ -9,6 +10,7 @@ import * as Tone from 'tone';
 export function resumeAudioContext(): void {
   const raw = Tone.getContext().rawContext;
   if (raw.state === 'running') return;
+  recordAudioEvent(`resume requested while ${raw.state}`);
   void Tone.start();
 }
 

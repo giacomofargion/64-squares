@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import * as Tone from 'tone';
 import { resumeAudioContext } from '@/lib/audio/resumeAudioContext';
+import { recordAudioEvent } from '@/lib/audio/audioDiagnostics';
 
 /**
  * Tracks whether the audio context is actually producing sound, and wakes it
@@ -16,11 +17,15 @@ export function useAudioContextRunning(audioEnabled: boolean): boolean {
   useEffect(() => {
     const raw = Tone.getContext().rawContext;
     const sync = () => setIsRunning(raw.state === 'running');
-    raw.addEventListener('statechange', sync);
+    const onStateChange = () => {
+      recordAudioEvent(`context ${raw.state}`);
+      sync();
+    };
+    raw.addEventListener('statechange', onStateChange);
     sync();
 
     if (!audioEnabled) {
-      return () => raw.removeEventListener('statechange', sync);
+      return () => raw.removeEventListener('statechange', onStateChange);
     }
 
     const resume = () => resumeAudioContext();
@@ -33,7 +38,7 @@ export function useAudioContextRunning(audioEnabled: boolean): boolean {
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
-      raw.removeEventListener('statechange', sync);
+      raw.removeEventListener('statechange', onStateChange);
       window.removeEventListener('pointerdown', resume, true);
       window.removeEventListener('keydown', resume, true);
       document.removeEventListener('visibilitychange', onVisible);

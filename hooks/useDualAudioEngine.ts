@@ -5,6 +5,7 @@ import * as Tone from 'tone';
 import type { SynthType } from '@/types/audio';
 import { DualSynthGenerator } from '@/components/audio/DualSynthGenerator';
 import { resumeAudioContext } from '@/lib/audio/resumeAudioContext';
+import { recordAudioEvent } from '@/lib/audio/audioDiagnostics';
 import { useAudioContextRunning } from '@/hooks/useAudioContextRunning';
 
 export function useDualAudioEngine(
@@ -21,10 +22,15 @@ export function useDualAudioEngine(
   // first enable (chat focus, background tab). Returning early left the
   // player with no way to start sound again.
   const initializeAudio = useCallback(async () => {
-    if (!ownSynthType) return false;
+    if (!ownSynthType) {
+      recordAudioEvent('enable ignored: own synth type not known yet');
+      return false;
+    }
 
     try {
       await Tone.start();
+      const state = Tone.getContext().rawContext.state;
+      recordAudioEvent(`enable: context ${state}`);
       if (!dualSynthGeneratorRef.current) {
         dualSynthGeneratorRef.current = new DualSynthGenerator(
           ownSynthType || 'Synth',
@@ -33,9 +39,10 @@ export function useDualAudioEngine(
       }
       if (!isInitialized) setIsInitialized(true);
       setIsReady(true);
-      return Tone.getContext().rawContext.state === 'running';
+      return state === 'running';
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
+      recordAudioEvent(`enable failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }, [isInitialized, ownSynthType, opponentSynthType]);

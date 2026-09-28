@@ -18,6 +18,10 @@ const realtimeDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(realtimeDir, '../..');
 const PORT = Number(process.env.PORT ?? 4124);
 const chromePath = process.env.CHROME_PATH || '/usr/local/bin/google-chrome';
+// Both players are tabs in one browser, so the background tab's animation
+// frames are throttled. waitForFunction polls on frames by default and can
+// stall there even after the DOM already has what we're waiting for.
+const POLL_MS = 50;
 
 const DEVICES = {
   A: { key: 'apikey-device-a', guest: 'Alice', orientation: 'w', label: 'A(white/creator)' },
@@ -217,7 +221,7 @@ try {
   async function enableAudio(device) {
     await device.page.waitForFunction(
       () => [...document.querySelectorAll('button')].some((button) => button.textContent?.includes('Enable Audio')),
-      { timeout: 20_000 }
+      { timeout: 20_000, polling: POLL_MS }
     );
     await device.page.evaluate(() => {
       [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Enable Audio'))?.click();
@@ -245,18 +249,34 @@ try {
     return ok;
   }
 
-  async function playMove(device, from, to) {
-    log(device.name, `=== ${device.name} PLAYS ${from}-${to} ===`);
-    if (!(await clickSquare(device, from))) return false;
+  async function selectSquare(device, square) {
+    if (!(await clickSquare(device, square))) return false;
     try {
       await device.page.waitForFunction(
         () =>
           [...document.querySelectorAll('.grid.grid-cols-8 > *')].some((cell) =>
             String(cell.className).includes('bg-green-')
           ),
-        { timeout: 3_000 }
+        { timeout: 3_000, polling: POLL_MS }
       );
+      return true;
     } catch {
+      return false;
+    }
+  }
+
+  async function playMove(device, from, to) {
+    log(device.name, `=== ${device.name} PLAYS ${from}-${to} ===`);
+    // The match page remounts the board (new key) when the opponent's move
+    // lands, and the note plays before that commit. A click in that gap
+    // selects on the outgoing board and the selection is lost, so tap again
+    // the way a player would.
+    let selected = await selectSquare(device, from);
+    if (!selected) {
+      log(device.name, `NO_LEGAL_HIGHLIGHT after selecting ${from}, retrying`);
+      selected = await selectSquare(device, from);
+    }
+    if (!selected) {
       log(device.name, `NO_LEGAL_HIGHLIGHT after selecting ${from}`);
       return false;
     }
@@ -295,7 +315,7 @@ try {
   for (const device of [alice, bob]) {
     await device.page.waitForFunction(
       () => document.querySelector('.grid.grid-cols-8')?.children.length === 64,
-      { timeout: 15_000 }
+      { timeout: 15_000, polling: POLL_MS }
     );
   }
 
@@ -348,11 +368,14 @@ try {
     try {
       await alice.page.waitForFunction(
         () => document.body.textContent?.includes('Bob has left the room.'),
-        { timeout: 5000 }
+        { timeout: 5_000, polling: POLL_MS }
       );
       log('server', 'PASS Alice saw that Bob left the room');
     } catch {
       fail('Alice was not told that Bob left the room');
+      log('server', `db chat: ${JSON.stringify(fake.db.chatMessages)}`);
+      const aliceText = await alice.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 1500));
+      log('server', `Alice body: ${aliceText}`);
     }
   }
 

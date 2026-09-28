@@ -9,25 +9,27 @@ import { WebSocketServer } from 'ws';
 const MATCH_ID = '11111111-2222-3333-4444-555555555555';
 const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
+const freshMatch = () => ({
+  id: MATCH_ID,
+  white_player_id: null,
+  black_player_id: null,
+  white_player_name: 'Alice',
+  black_player_name: null,
+  room_name: 'probe room',
+  current_fen: INITIAL_FEN,
+  status: 'waiting',
+  winner_id: null,
+  white_player_synth_type: 'Synth',
+  black_player_synth_type: 'Synth',
+  started_at: null,
+  finished_at: null,
+  audio_file_url: null,
+  created_at: new Date().toISOString(),
+});
+
 export function createFakeSupabase({ port, bundles, apikeyToDevice, log, activationMs = 0 }) {
   const db = {
-    match: {
-      id: MATCH_ID,
-      white_player_id: null,
-      black_player_id: null,
-      white_player_name: 'Alice',
-      black_player_name: null,
-      room_name: 'probe room',
-      current_fen: INITIAL_FEN,
-      status: 'waiting',
-      winner_id: null,
-      white_player_synth_type: 'Synth',
-      black_player_synth_type: 'Synth',
-      started_at: null,
-      finished_at: null,
-      audio_file_url: null,
-      created_at: new Date().toISOString(),
-    },
+    match: freshMatch(),
     moves: [],
     chatMessages: [],
   };
@@ -72,7 +74,13 @@ export function createFakeSupabase({ port, bundles, apikeyToDevice, log, activat
   const httpServer = createServer((req, res) => {
     const url = new URL(req.url, `http://localhost:${port}`);
     const send = (status, body, headers = {}) => {
-      res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', ...headers });
+      res.writeHead(status, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+        ...headers,
+      });
       res.end(body === undefined ? '' : JSON.stringify(body));
     };
 
@@ -92,6 +100,16 @@ export function createFakeSupabase({ port, bundles, apikeyToDevice, log, activat
 
     if (url.pathname === '/rest/v1/matches') {
       if (req.method === 'GET') return send(200, wantsSingleObject ? db.match : [db.match]);
+      if (req.method === 'POST') {
+        return readBody(req).then((body) => {
+          const row = Array.isArray(body) ? body[0] : body;
+          db.match = { ...freshMatch(), ...row, id: MATCH_ID };
+          db.moves = [];
+          db.chatMessages = [];
+          log('server', `DB_INSERT_MATCH ${JSON.stringify(row)}`);
+          return send(201, wantsSingleObject ? db.match : [db.match]);
+        });
+      }
       if (req.method === 'PATCH') {
         return readBody(req).then((patch) => {
           Object.assign(db.match, patch);
@@ -137,9 +155,14 @@ export function createFakeSupabase({ port, bundles, apikeyToDevice, log, activat
 
   const wss = new WebSocketServer({ server: httpServer, path: '/realtime/v1/websocket' });
 
+  // The production bundle carries one anon key for everyone, so sockets that
+  // don't map to a device are labelled in the order they connect.
+  const fallbackLabels = Object.values(apikeyToDevice);
+  let unknownSockets = 0;
+
   wss.on('connection', (socket, req) => {
     const apikey = new URL(req.url, 'http://localhost').searchParams.get('apikey') ?? '';
-    const deviceName = apikeyToDevice[apikey] ?? `unknown(${apikey})`;
+    const deviceName = apikeyToDevice[apikey] ?? fallbackLabels[unknownSockets++] ?? `unknown(${apikey})`;
     socket.__deviceName = deviceName;
     joins.set(socket, new Map());
     log(deviceName, 'WS_CONNECTED');

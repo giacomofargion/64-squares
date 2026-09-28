@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import type { SynthType } from '@/types/audio';
 import { getNoteMapping, getRowNotes, squareToNote, getColumnIndex } from '@/lib/audio/noteMapping';
 import { getSynthConstructor, getTimbreParams, getRowBaseTimbreParams } from '@/lib/audio/synthConfig';
+import { recordAudioEvent } from '@/lib/audio/audioDiagnostics';
 
 export class SoundGenerator {
   private rowSynths: Tone.PolySynth<Tone.Synth>[] = []; // Array of 8 PolySynths (one per row)
@@ -17,6 +18,7 @@ export class SoundGenerator {
   constructor(synthType: SynthType = 'Synth') {
     this.synthType = synthType;
     this.initializeAudioChainSync();
+    recordAudioEvent(`instrument built: ${synthType}`);
     // Generate reverb asynchronously (non-blocking)
     this.initializeReverbAsync();
   }
@@ -94,8 +96,10 @@ export class SoundGenerator {
       this.reverbReady = true;
       // Set reverb amount once ready
       this.reverb.wet.value = this.reverbAmount;
+      recordAudioEvent(`reverb ready: ${this.synthType}`);
     } catch (error) {
       console.error('Error generating reverb:', error);
+      recordAudioEvent(`reverb failed: ${this.synthType} (${error instanceof Error ? error.message : String(error)})`);
       // Continue without reverb if generation fails
       this.reverbReady = false;
     }
@@ -140,8 +144,10 @@ export class SoundGenerator {
       // Track active note
       const endTime = Tone.Time(triggerTime).toSeconds() + this.NOTE_DURATION;
       this.activeNotes.set(square, endTime);
+      recordAudioEvent(`note ${square}: ${this.synthType} (${Tone.getContext().rawContext.state})`);
     } catch (error) {
       console.error(`Error triggering note for square ${square}:`, error);
+      recordAudioEvent(`note ${square} failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -205,6 +211,7 @@ export class SoundGenerator {
       rowPolySynth.releaseAll();
     });
     this.activeNotes.clear();
+    recordAudioEvent(`released all notes: ${this.synthType}`);
   }
 
   /**
@@ -212,6 +219,7 @@ export class SoundGenerator {
    */
   async setSynthType(synthType: SynthType): Promise<void> {
     if (this.synthType === synthType) return;
+    recordAudioEvent(`instrument rebuilt: ${this.synthType} -> ${synthType}`);
 
     // Stop all current notes
     this.stopAll();
@@ -262,6 +270,7 @@ export class SoundGenerator {
    * Cleanup - dispose of all resources
    */
   dispose(): void {
+    recordAudioEvent(`instrument disposed: ${this.synthType}`);
     this.stopAll();
     this.rowSynths.forEach((rowPolySynth) => {
       rowPolySynth.dispose();

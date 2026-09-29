@@ -878,8 +878,20 @@ export default function MatchPage() {
           <div className="lg:col-span-7 space-y-4">
             <Card>
               <CardContent className="px-0 sm:px-6 pt-4 sm:pt-6 space-y-4">
-            {(opponentJoinedMessage || opponentLeftMessage || roomEndedMessage || realtimeError) && (
+            {(opponentJoinedMessage || opponentLeftMessage || roomEndedMessage || realtimeError || (audioEngine.isInitialized && !audioEngine.isRunning)) && (
             <div className="px-2 sm:px-0 space-y-4">
+            {audioEngine.isInitialized && !audioEngine.isRunning && (
+              <Alert variant="destructive">
+                <AlertTitle>🔇 Sound paused</AlertTitle>
+                <AlertDescription className="mb-2">
+                  Your browser suspended audio, usually after switching apps or locking the screen. Moves won&apos;t make sound until you resume it.
+                </AlertDescription>
+                <Button type="button" onClick={handleEnableAudio} variant="outline" size="sm">
+                  Resume audio
+                </Button>
+              </Alert>
+            )}
+
             {opponentJoinedMessage && (
               <Alert>
                 <AlertTitle>👋 Player Joined</AlertTitle>
